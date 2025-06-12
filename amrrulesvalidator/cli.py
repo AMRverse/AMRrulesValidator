@@ -1,4 +1,5 @@
 import argparse
+from amrrulesvalidator.utils.resources import ResourceManager
 
 
 def main():
@@ -27,8 +28,15 @@ def main():
         print("TODO clean")
         return 0
     elif args.command == "update-resources":
-        print("TODO update-resources")
-        return 0
+        print("Updating resources...")
+        resource_manager = ResourceManager()
+        success = resource_manager.setup_all_resources()
+        if success:
+            print("Resources updated successfully.")
+            return 0
+        else:
+            print("Failed to update some resources.")
+            return 1
     else:
         parser.print_help()
         return 1
