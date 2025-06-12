@@ -215,7 +215,7 @@ def check_gene(gene_list, rule_list):
         return False
 
 
-def check_id_accessions(nodeID_list, protein_list, nucleotide_list, hmm_list, variation_type_list, refseq_url, node_url, hmm_file):
+def check_id_accessions(nodeID_list, protein_list, nucleotide_list, hmm_list, variation_type_list, refseq_file, node_file, hmm_file):
     
     print("\nChecking nodeID, refseq accession, GenBank accession and HMM accession columns...")
 
@@ -223,10 +223,7 @@ def check_id_accessions(nodeID_list, protein_list, nucleotide_list, hmm_list, va
     # Combine the nucl and prot accessions together
     protein_accessions = [] 
     nucleotide_accessions = []
-    print("Downloading NCBI Reference Gene Catalog file...")
-    from .utils.resources import download_amrfp_files  # Import here to avoid circular import
-    refseq_file = download_amrfp_files(refseq_url)
-    refseq = csv.DictReader(refseq_file, delimiter='\t')
+    refseq = csv.DictReader(open(refseq_file, 'r'), delimiter='\t')
     for row in refseq:
         if "refseq_protein_accession" in row:
             protein_accessions.append(row["refseq_protein_accession"])
@@ -241,9 +238,7 @@ def check_id_accessions(nodeID_list, protein_list, nucleotide_list, hmm_list, va
     nucleotide_accessions = [value for value in nucleotide_accessions if value != ""]
 
     refseq_node_ids = []
-    print("Downloading NCBI Gene Hierarchy file...")
-    node_file = download_amrfp_files(node_url)
-    refseq_hierarchy = csv.DictReader(node_file, delimiter='\t')
+    refseq_hierarchy = csv.DictReader(open(node_file, 'r'), delimiter='\t')
     for row in refseq_hierarchy:
         if "parent_node_id" in row:
             refseq_node_ids.append(row["parent_node_id"])

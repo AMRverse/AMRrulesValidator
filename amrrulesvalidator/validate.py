@@ -78,12 +78,12 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
     # Check gene accessions
     accession_columns = ["nodeID", "protein accession", "nucleotide accession", "HMM accession"]
     if all(col in found_columns for col in accession_columns):
-        refseq_url = None  # Replace with ResourceManager call when implemented
-        hmm_url = None  # Replace with ResourceManager call when implemented
-        amrfp_nodes_url = None  # Replace with ResourceManager call when implemented
+        refseq_file = rm.dir / "ReferenceGeneCatalog.txt"
+        amrfp_nodes = rm.dir / "ReferenceGeneHierarchy.txt"
+        hmm_file = rm.dir / "hmms_amrfp_2024-12-18.1.tsv"
         
         # Print placeholder message about database version
-        print(f"\nChecking against AMRFinderPlus database version (placeholder)...")
+        print(f"\nChecking against AMRFinderPlus database version {rm.get_amrfp_db_version()}...")
         
         # Check accessions
         if "variation type" in found_columns:
@@ -93,7 +93,7 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
                 get_column("nucleotide accession", rows), 
                 get_column("HMM accession", rows), 
                 get_column("variation type", rows), 
-                refseq_url, amrfp_nodes_url, hmm_url
+                refseq_file, amrfp_nodes, hmm_file
             )
         else:
             summary_checks["gene accessions"] = check_id_accessions(
@@ -101,7 +101,7 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
                 get_column("protein accession", rows), 
                 get_column("nucleotide accession", rows), 
                 get_column("HMM accession", rows), 
-                None, refseq_url, amrfp_nodes_url, hmm_url
+                None, refseq_file, amrfp_nodes, hmm_file
             )
     else:
         for column in accession_columns:
@@ -112,7 +112,7 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
 
     # Check ARO accession
     if "ARO accession" in found_columns:
-        aro_terms = None  # Replace with ResourceManager call when implemented
+        aro_terms = rm.aro_terms()  # Get ARO terms from ResourceManager
         summary_checks["ARO accession"] = check_aro(get_column("ARO accession", rows), aro_terms)
     else:
         print("\n❌ No ARO accession column found in file. Spec v0.6 requires this column to be present. Continuing to validate other columns...")
@@ -179,7 +179,8 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
     if "drug" in found_columns and "drug class" in found_columns:
         summary_checks["drug and drug class"] = check_drug_drugclass(
             get_column("drug", rows), 
-            get_column("drug class", rows)
+            get_column("drug class", rows),
+            rm  # Pass ResourceManager to check_drug_drugclass
         )
     else:
         for column in ["drug", "drug class"]:
@@ -309,8 +310,7 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
     print(f"❌ Failed: {len(failed_checks)}")
     for check in failed_checks:
         print(f"  - {check}")
-    print("Checked against AMRFinderPlus database version: [placeholder]")
-
+    print(f"Checked against AMRFinderPlus database version: {rm.get_amrfp_db_version()}")
     # Write the processed rows to the output file
     write_tsv(rows, output_p, CANONICAL_COLUMNS)
     

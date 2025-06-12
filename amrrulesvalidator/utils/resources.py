@@ -329,6 +329,8 @@ class ResourceManager:
         
         # TODO: HMM file is missing in this implementation
         # Need to determine where to get the HMM file from as it's not available via direct URL
+        # Draft suggestion is to use a hardcoded option
+        hmm_file = self.dir / "hmms_amrfp_2024-12-18.1.tsv"
         
         success = True
         for filename, url in file_urls.items():
