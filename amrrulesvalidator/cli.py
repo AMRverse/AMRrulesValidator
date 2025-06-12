@@ -1,5 +1,7 @@
 import argparse
+from pathlib import Path
 from amrrulesvalidator.utils.resources import ResourceManager
+from amrrulesvalidator.validate import run_validate
 
 
 def main():
@@ -22,8 +24,17 @@ def main():
     args = parser.parse_args()
     
     if args.command == "validate":
-        print("TODO validate")
-        return 0
+        print(f"Validating {args.input}...")
+        input_path = Path(args.input)
+        output_path = Path(args.output)
+        resource_manager = ResourceManager()
+        success = run_validate(input_path, output_path, resource_manager)
+        if success:
+            print(f"Validation complete. Output written to {args.output}")
+            return 0
+        else:
+            print("Validation failed.")
+            return 1
     elif args.command == "clean":
         print("TODO clean")
         return 0

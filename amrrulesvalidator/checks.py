@@ -2,6 +2,7 @@
 
 import csv
 import re
+from pathlib import Path
 
 
 def check_if_allowed_value(value_list, col_name, allowable_values, missing_allowed=False):
@@ -84,15 +85,22 @@ def check_ruleIDs(id_list):
         return False
 
 
-def check_organism(txid_list, organism_list):
+def check_organism(txid_list, organism_list, resource_manager=None):
     
     print("\nChecking txid and organism columns...")
 
     # read in the valid NCBI organism names and their corresponding txids
-    with open('card-ontology/ncbi_taxonomy.tsv', 'r') as f:
+    if resource_manager:
+        # Use the ResourceManager to access the file
+        taxonomy_file_path = resource_manager.dir / "ncbi_taxonomy.tsv"
+        if not taxonomy_file_path.exists():
+            print("❌ Cannot find NCBI taxonomy file. Run 'amrrules update-resources' to download it.")
+            return False
+    
+    # Read the taxonomy file
+    with open(taxonomy_file_path, 'r') as f:
         reader = csv.DictReader(f, delimiter='\t')
         ncbi_organism_dict = {row['Accession']: row['Name'] for row in reader}
-        
     
     # Initialize a dictionary to store invalid rows and reasons
     invalid_txid_indices = {}
@@ -470,11 +478,27 @@ def check_mutation_variation(mutation_list, variation_list):
         return False
 
 
-def extract_card_drug_names():
+def extract_card_drug_names(resource_manager=None):
     # read in the file that lists all the drugs and drug classes that are in the current version of the CARD ontology
     drug_names_card = []
     drug_classes_card = []
-    with open('card_drug_names.tsv', newline='') as card_drugs_file:
+    
+    if resource_manager:
+        # Use the ResourceManager to access the file
+        drug_names_file_path = resource_manager.dir / "card_drug_names.tsv"
+        if not drug_names_file_path.exists():
+            print("❌ Cannot find CARD drug names file. Run 'amrrules update-resources' to download it.")
+            return [], []
+    else:
+        # Fallback to direct file access if no ResourceManager provided
+        drug_names_file_path = Path('amrrulesvalidator/resources/card_drug_names.tsv')
+        if not drug_names_file_path.exists():
+            drug_names_file_path = Path('card_drug_names.tsv')
+            if not drug_names_file_path.exists():
+                print("❌ Cannot find CARD drug names file. Run 'amrrules update-resources' to download it.")
+                return [], []
+    
+    with open(drug_names_file_path, newline='') as card_drugs_file:
         reader = csv.DictReader(card_drugs_file, delimiter='\t')
         for row in reader:
             if row['Drug Name'] not in drug_names_card:
@@ -484,12 +508,12 @@ def extract_card_drug_names():
     return drug_names_card, drug_classes_card
 
 
-def check_drug_drugclass(drug_list, drug_class_list):
+def check_drug_drugclass(drug_list, drug_class_list, resource_manager=None):
    
     print("\nChecking drug and drug class columns...")
 
     # read in the file that lists all the drugs and drug classes that are in the current version of the CARD ontology
-    card_drugs, card_drug_classes = extract_card_drug_names()
+    card_drugs, card_drug_classes = extract_card_drug_names(resource_manager)
     
     # want to check that there is at least one value in either drug or drug class
     # need to check that if the value isn't '-', its a valid drug or drug class name as per card_drugs and card_drug_classes

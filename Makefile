@@ -8,7 +8,7 @@ dev:
 	pip install -e .
 	@echo "📥 Downloading and setting up resource files..."
 	python -c "from amrrulesvalidator.utils.resources import ResourceManager; ResourceManager().setup_all_resources()"
-	@echo "✓ Setup complete, resources include CARD ontology, drug information, and AMRFinderPlus data"
+	@echo "✓ Setup complete, resources include CARD ontology, CARD drug information, and the latest AMRFinderPlus data"
 
 # Run tests
 test:
