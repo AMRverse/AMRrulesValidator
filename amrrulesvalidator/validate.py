@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from amrrulesvalidator.constants import CANONICAL_COLUMNS
+from amrrulesvalidator.constants import CANONICAL_COLUMNS, SPEC_VERSION
 from amrrulesvalidator.utils.io import read_tsv, write_tsv
 from amrrulesvalidator.utils.resources import ResourceManager
 from amrrulesvalidator.checks import *
@@ -40,7 +40,7 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
     print(f"\nValidating rules file: {input_p}")
 
     # Print column headers
-    print("\nChecking that all required columns for spec v0.6 are present...")
+    print(f"\nChecking that all required columns for spec {SPEC_VERSION} are present...")
     found_columns = list(rows[0].keys()) if rows else []
     for column in CANONICAL_COLUMNS:
         if column not in found_columns:
@@ -52,7 +52,7 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
         rule_ids = get_column("ruleID", rows)
         summary_checks["ruleID"] = check_ruleIDs(rule_ids)
     else:
-        print("\n❌ No ruleID column found in file. Spec v0.6 requires this column to be present. Continuing to validate other columns...")
+        print(f"\n❌ No ruleID column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
         rule_ids = None
         summary_checks["ruleID"] = False
 
@@ -62,17 +62,17 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
         organism_list = get_column("organism", rows)
         summary_checks["txid and organism"] = check_organism(txid_list, organism_list, rm)
     else:
-        print("\n❌ No organism or txid column found in file. Spec v0.6 requires this column to be present. Continuing to validate other columns...")
+        print(f"\n❌ No organism or txid column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
         summary_checks["txid and organism"] = False
 
     # Check gene
     if "gene" in found_columns and "ruleID" in found_columns:
         summary_checks["gene"] = check_gene(get_column("gene", rows), rule_ids)
     elif "gene" in found_columns and not "ruleID" in found_columns:
-        print("\n❌ No ruleID column found in file. Spec v0.6 requires this column to be present, and cannot validate gene without it. Continuing to validate other columns...")
+        print(f"\n❌ No ruleID column found in file. Spec {SPEC_VERSION} requires this column to be present, and cannot validate gene without it. Continuing to validate other columns...")
         summary_checks["gene"] = False
     else:
-        print("\n❌ No gene column found in file. Spec v0.6 requires this column to be present. Continuing to validate other columns...")
+        print(f"\n❌ No gene column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
         summary_checks["gene"] = False
     
     # Check gene accessions
@@ -107,7 +107,7 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
         for column in accession_columns:
             if column not in found_columns:
                 print(f"\n❌ {column} column not found in file.")
-        print("\n❌ Spec v0.6 requires all of nodeID, protein accession, nucleotide accession, HMM accession and variation type columns to be present in order to validate. Continuing to validate other columns...")
+        print(f"\n❌ Spec {SPEC_VERSION} requires all of nodeID, protein accession, nucleotide accession, HMM accession and variation type columns to be present in order to validate. Continuing to validate other columns...")
         summary_checks["gene accessions"] = False
 
     # Check ARO accession
@@ -115,14 +115,14 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
         aro_terms = rm.aro_terms()  # Get ARO terms from ResourceManager
         summary_checks["ARO accession"] = check_aro(get_column("ARO accession", rows), aro_terms)
     else:
-        print("\n❌ No ARO accession column found in file. Spec v0.6 requires this column to be present. Continuing to validate other columns...")
+        print(f"\n❌ No ARO accession column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
         summary_checks["ARO accession"] = False
     
     # Check mutation
     if "mutation" in found_columns:
         summary_checks["mutation"] = check_mutation(get_column("mutation", rows))
     else:
-        print("\n❌ No mutation column found in file. Spec v0.6 requires this column to be present. Continuing to validate other columns...")
+        print(f"\n❌ No mutation column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
         summary_checks["mutation"] = False
     
     # Check variation type
@@ -140,7 +140,7 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
             variation_allowed_types
         )
     else:
-        print("\n❌ No variation type column found in file. Spec v0.6 requires this column to be present. Continuing to validate other columns...")
+        print(f"\n❌ No variation type column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
         summary_checks["variation type"] = False
 
     # Check mutation and variation type compatibility
@@ -172,7 +172,7 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
                 get_column("gene context", rows)
             )
     else:
-        print("\n❌ No gene context column found in file. Spec v0.6 requires this column to be present. Continuing to validate other columns...")
+        print(f"\n❌ No gene context column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
         summary_checks["gene context"] = False
 
     # Check drug and drug class
@@ -186,7 +186,7 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
         for column in ["drug", "drug class"]:
             if column not in found_columns:
                 print(f"\n❌ {column} column not found in file.")
-        print("\n❌ Spec v0.6 requires at least both drug and drug class columns to be present in order to validate. Continuing to validate other columns...")
+        print(f"\n❌ Spec {SPEC_VERSION} requires at least both drug and drug class columns to be present in order to validate. Continuing to validate other columns...")
         summary_checks["drug and drug class"] = False
 
     # Check phenotype
@@ -204,7 +204,7 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
                 get_column("gene context", rows)
             )
     else:
-        print("\n❌ No phenotype column found in file. Spec v0.6 requires this column to be present. Continuing to validate other columns...")
+        print(f"\n❌ No phenotype column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
         summary_checks["phenotype"] = False
 
     # Check clinical category
@@ -215,7 +215,7 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
             ["S", "I", "R"]
         )
     else:
-        print("\n❌ No clinical category column found in file. Spec v0.6 requires this column to be present. Continuing to validate other columns...")
+        print(f"\n❌ No clinical category column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
         summary_checks["clinical category"] = False
 
     # Check breakpoint
@@ -225,7 +225,7 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
             "breakpoint"
         )
     else:
-        print("\n❌ No breakpoint column found in file. Spec v0.6 requires this column to be present. Continuing to validate other columns...")
+        print(f"\n❌ No breakpoint column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
         summary_checks["breakpoint"] = False
 
     # Check clinical category and breakpoint concordance
@@ -243,7 +243,7 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
             get_column("breakpoint standard", rows)
         )
     else:
-        print("\n❌ No breakpoint standard column found in file. Spec v0.6 requires this column to be present. Continuing to validate other columns...")
+        print(f"\n❌ No breakpoint standard column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
         summary_checks["breakpoint standard"] = False
     
     # Check breakpoint condition
@@ -264,7 +264,7 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
             missing_allowed=True
         )
     else:
-        print("\n❌ No breakpoint condition column found in file. Spec v0.6 requires this column to be present. Continuing to validate other columns...")
+        print(f"\n❌ No breakpoint condition column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
         summary_checks["breakpoint condition"] = False
 
     # Check PMID
@@ -274,7 +274,7 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
             "PMID"
         )
     else:
-        print("\n❌ No PMID column found in file. Spec v0.6 requires this column to be present. Continuing to validate other columns...")
+        print(f"\n❌ No PMID column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
         summary_checks["PMID"] = False
 
     # Check evidence code
@@ -283,7 +283,7 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
             get_column("evidence code", rows)
         )
     else:
-        print("\n❌ No evidence code column found in file. Spec v0.6 requires this column to be present. Continuing to validate other columns...")
+        print(f"\n❌ No evidence code column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
         summary_checks["evidence code"] = False
 
     # Check evidence grade and limitations
@@ -296,7 +296,7 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
         for column in ["evidence grade", "evidence limitations"]:
             if column not in found_columns:
                 print(f"\n❌ {column} column not found in file.")
-        print("\n❌ Both evidence grade and limitations columns required for spec v0.6.")
+        print(f"\n❌ Both evidence grade and limitations columns required for spec {SPEC_VERSION}.")
         summary_checks["evidence grade and limitations"] = False
 
     # Print summary of checks
