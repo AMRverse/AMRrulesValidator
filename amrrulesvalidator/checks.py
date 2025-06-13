@@ -251,8 +251,8 @@ def check_id_accessions(nodeID_list, protein_list, nucleotide_list, hmm_list, va
     hmm_accessions = []
     hmm_table = csv.DictReader(open(hmm_file, newline=''), delimiter='\t')
     for row in hmm_table:
-        if "#Accession" in row:
-            hmm_accessions.append(row["#Accession"])
+        if "#hmm_accession" in row:
+            hmm_accessions.append(row["#hmm_accession"])
     # remove any empty strings
     hmm_accessions  = [value for value in hmm_accessions if value != ""]
 

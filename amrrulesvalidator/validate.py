@@ -123,7 +123,7 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
     if all(col in found_columns for col in accession_columns):
         refseq_file = rm.dir / "ReferenceGeneCatalog.txt"
         amrfp_nodes = rm.dir / "ReferenceGeneHierarchy.txt"
-        hmm_file = rm.dir / "hmms_amrfp_2024-12-18.1.tsv"
+        hmm_file = rm.dir / "NCBIfam-AMRFinder.tsv"
         
         # Print placeholder message about database version
         print(f"\nChecking against AMRFinderPlus database version {rm.get_amrfp_db_version()}...")

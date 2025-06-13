@@ -318,19 +318,17 @@ class ResourceManager:
         # URLs for the AMRFinderPlus resources
         refseq_url = 'https://ftp.ncbi.nlm.nih.gov/pathogen/Antimicrobial_resistance/AMRFinderPlus/database/latest/ReferenceGeneCatalog.txt'
         amrfp_nodes_url = 'https://ftp.ncbi.nlm.nih.gov/pathogen/Antimicrobial_resistance/AMRFinderPlus/database/latest/ReferenceGeneHierarchy.txt'
+        hmm_url = 'https://ftp.ncbi.nlm.nih.gov/hmm/NCBIfam-AMRFinder/latest/NCBIfam-AMRFinder.tsv'
         amrfp_version_url = 'https://ftp.ncbi.nlm.nih.gov/pathogen/Antimicrobial_resistance/AMRFinderPlus/database/latest/version.txt'
         
         # Files to download
         file_urls = {
             'ReferenceGeneCatalog.txt': refseq_url,
             'ReferenceGeneHierarchy.txt': amrfp_nodes_url,
+            'NCBIfam-AMRFinder.tsv': hmm_url,
             'version.txt': amrfp_version_url
         }
         
-        # TODO: HMM file is missing in this implementation
-        # Need to determine where to get the HMM file from as it's not available via direct URL
-        # Draft suggestion is to use a hardcoded option
-        hmm_file = self.dir / "hmms_amrfp_2024-12-18.1.tsv"
         
         success = True
         for filename, url in file_urls.items():
