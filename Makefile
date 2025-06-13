@@ -7,7 +7,7 @@ dev:
 	@echo "📦 Installing package in editable mode..."
 	pip install -e .
 	@echo "📥 Downloading and setting up resource files..."
-	python -c "from amrrulesvalidator.utils.resources import ResourceManager; ResourceManager().setup_all_resources()"
+	python -c "from amrrulevalidator.utils.resources import ResourceManager; ResourceManager().setup_all_resources()"
 	@echo "✓ Setup complete, resources include CARD ontology, CARD drug information, and the latest AMRFinderPlus data"
 
 # Run tests
