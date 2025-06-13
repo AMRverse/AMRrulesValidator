@@ -2,10 +2,10 @@
 
 from pathlib import Path
 
-from amrrulesvalidator.constants import CANONICAL_COLUMNS, SPEC_VERSION
-from amrrulesvalidator.utils.io import read_tsv, write_tsv
-from amrrulesvalidator.utils.resources import ResourceManager
-from amrrulesvalidator.checks import *
+from amrrulevalidator.constants import CANONICAL_COLUMNS, SPEC_VERSION
+from amrrulevalidator.utils.io import read_tsv, write_tsv
+from amrrulevalidator.utils.resources import ResourceManager
+from amrrulevalidator.checks import *
 
 
 def get_column(column_name, rows):

@@ -1,11 +1,11 @@
 import argparse
 from pathlib import Path
-from amrrulesvalidator.utils.resources import ResourceManager
-from amrrulesvalidator.validate import run_validate
+from amrrulevalidator.utils.resources import ResourceManager
+from amrrulevalidator.validate import run_validate
 
 
 def main():
-    parser = argparse.ArgumentParser(prog="amrrules", description="AMR rules validator")
+    parser = argparse.ArgumentParser(prog="amrrule", description="AMRrulevalidator")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
     
     # validate subcommand
