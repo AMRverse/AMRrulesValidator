@@ -94,7 +94,7 @@ def check_organism(txid_list, organism_list, resource_manager=None):
         # Use the ResourceManager to access the file
         taxonomy_file_path = resource_manager.dir / "ncbi_taxonomy.tsv"
         if not taxonomy_file_path.exists():
-            print("❌ Cannot find NCBI taxonomy file. Run 'amrrules update-resources' to download it.")
+            print("❌ Cannot find NCBI taxonomy file. Run 'amrrule update-resources' to download it.")
             return False
     
     # Read the taxonomy file
@@ -482,15 +482,15 @@ def extract_card_drug_names(resource_manager=None):
         # Use the ResourceManager to access the file
         drug_names_file_path = resource_manager.dir / "card_drug_names.tsv"
         if not drug_names_file_path.exists():
-            print("❌ Cannot find CARD drug names file. Run 'amrrules update-resources' to download it.")
+            print("❌ Cannot find CARD drug names file. Run 'amrrule update-resources' to download it.")
             return [], []
     else:
         # Fallback to direct file access if no ResourceManager provided
-        drug_names_file_path = Path('amrrulesvalidator/resources/card_drug_names.tsv')
+        drug_names_file_path = Path('amrrulevalidator/resources/card_drug_names.tsv')
         if not drug_names_file_path.exists():
             drug_names_file_path = Path('card_drug_names.tsv')
             if not drug_names_file_path.exists():
-                print("❌ Cannot find CARD drug names file. Run 'amrrules update-resources' to download it.")
+                print("❌ Cannot find CARD drug names file. Run 'amrrule update-resources' to download it.")
                 return [], []
     
     with open(drug_names_file_path, newline='') as card_drugs_file:

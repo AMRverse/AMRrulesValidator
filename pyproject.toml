@@ -29,7 +29,7 @@ dev = [
 ]
 
 [project.scripts]
-amrrules = "amrrulevalidator.cli:main"
+amrrule = "amrrulevalidator.cli:main"
 
 [project.urls]
 "Homepage" = "https://github.com/AMRverse/AMRrulevalidator"
