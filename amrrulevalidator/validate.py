@@ -234,5 +234,4 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
     # Write the processed rows to the output file
     write_tsv(rows, output_p, CANONICAL_COLUMNS)
 
-    
     return True
