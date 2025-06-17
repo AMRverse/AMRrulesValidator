@@ -177,27 +177,15 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
             rm)
 
     # Check phenotype
-    if "phenotype" in found_columns:
-        summary_checks["phenotype"] = check_if_allowed_value(
-            get_column("phenotype", rows), 
-            "phenotype", 
-            ["wildtype", "nonwildtype"]
-        )
-        
-        # Check phenotype and context concordance
-        if "gene context" in found_columns:
-            summary_checks["phenotype and context concordance"] = check_phenotype_context(
-                get_column("phenotype", rows), 
-                get_column("gene context", rows)
-            )
-    else:
-        print(f"\n❌ No phenotype column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
-        summary_checks["phenotype"] = False
+    print("\nChecking phenotype column...")
+    summary_checks["phenotype"], rows = check_phenotype(
+        get_column("phenotype", rows),
+        rows)
 
     print("Writing output file...")
     # Write the processed rows to the output file
     write_tsv(rows, output_p, CANONICAL_COLUMNS)
-    
+
     # Check clinical category
     if "clinical category" in found_columns:
         summary_checks["clinical category"] = check_if_allowed_value(

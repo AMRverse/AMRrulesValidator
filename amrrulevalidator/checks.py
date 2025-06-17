@@ -544,29 +544,30 @@ def check_drug_drugclass(drug_list, drug_class_list, rows, rm=None):
     return check_result, rows
 
 
-def check_phenotype_context(phenotype_list, context_list):
-    
-    print("\nChecking phenotype and context columns are concordant...")
+def check_phenotype(phenotype_list, rows):
 
-    # check that if context is core, phenotype must be wildtype
-    invalid_indices = []
-    for index, (phenotype, context) in enumerate(zip(phenotype_list, context_list)):
-        phenotype = phenotype.strip()
-        context = context.strip()
-        if context == 'core' and phenotype != 'wildtype':
-            invalid_indices.append(index)
+    phenotype_missing, rows = check_if_col_empty(phenotype_list, 'phenotype', rows=rows)
+
+    if phenotype_missing:
+        print("❌ Phenotype column is empty. Please provide values in this column to validate.")
+        return False, rows
     
-    if not invalid_indices:
-        print("✅ All phenotype and context values are concordant")
-        return True
-    else:
-        print(f"❌ {len(invalid_indices)} rows have failed the check")
-        print("If the gene context is a 'core' gene, the expected phenotype should generally be 'wildtype', " \
-        "unless the rule refers to a specific variant of the core gene for which there is evidence of a nonwildtype " \
-        "phenotype (in which case the variant should be coded as 'acquired' not core)")
-        for index in invalid_indices:
-            print(f"Row {index + 2}: {phenotype_list[index]} and {context_list[index]}")
-        return False
+    # check that phenotype is one of the allowable values, wildtype or non wildtype
+    invalid_dict, rows = check_values_in_list(
+        value_list=phenotype_list,
+        allowed_values=['wildtype', 'nonwildtype'],
+        col_name='phenotype',
+        rows=rows
+    )
+
+    check_result = report_check_results(
+        check_name="phenotype",
+        invalid_dict=invalid_dict,
+        success_message="All phenotype values are valid",
+        failure_message="Phenotype values must be either 'wildtype' or 'non wildtype'."
+    )
+
+    return check_result, rows
 
 
 def check_sir_breakpoint(clinical_category_list, breakpoint_list):
