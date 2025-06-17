@@ -258,6 +258,11 @@ def check_gene(gene_list, rule_list, rows):
 
 def check_id_accessions(nodeID_list, protein_list, nucleotide_list, hmm_list, variation_type_list, refseq_prot_accessions, refseq_nucl_accessions, refseq_node_ids, hmm_accessions, rows):
     
+    nodeID_missing, rows = check_if_col_empty(nodeID_list, 'nodeID', rows=rows)
+    protein_missing, rows = check_if_col_empty(protein_list, 'protein accession', rows=rows)
+    nucleotide_missing, rows = check_if_col_empty(nucleotide_list, 'nucleotide accession', rows=rows)
+    hmm_missing, rows = check_if_col_empty(hmm_list, 'HMM accession', rows=rows)
+
     # now check individual columns for allowable values
     # this function is actually multiple smaller checks
     # for each list, if any value is NA or empty, we should replace with ENTRY MISSING, as there should be a dash
@@ -265,13 +270,22 @@ def check_id_accessions(nodeID_list, protein_list, nucleotide_list, hmm_list, va
     # finally, any rows that have all values empty, NA, '-' or ENTRY MISSING should be checked to see if they have variation type 'Combination'
     # this would make that row valid. Otherwise, the row is invalid
 
-    invalid_node_dict, rows = check_values_in_list(nodeID_list, refseq_node_ids, 'nodeID', rows, missing_allowed=True, fail_reason="is not a valid NCBI Reference Gene Hierarchy node ID")
+    invalid_node_dict = {}
+    invalid_prot_dict = {}
+    invalid_nucl_dict = {}
+    invalid_hmm_dict = {}
 
-    invalid_prot_dict, rows = check_values_in_list(protein_list, refseq_prot_accessions, 'protein accession', rows, missing_allowed=True, fail_reason="is not an NCBI Reference Gene Catalog protein accession")
+    if not nodeID_missing:
+        invalid_node_dict, rows = check_values_in_list(nodeID_list, refseq_node_ids, 'nodeID', rows, missing_allowed=True, fail_reason="is not a valid NCBI Reference Gene Hierarchy node ID")
 
-    invalid_nucl_dict, rows = check_values_in_list(nucleotide_list, refseq_nucl_accessions, 'nucleotide accession', rows, missing_allowed=True, fail_reason="is not an NCBI Reference Gene Catalog nucleotide accession")
+    if not protein_missing:
+        invalid_prot_dict, rows = check_values_in_list(protein_list, refseq_prot_accessions, 'protein accession', rows, missing_allowed=True, fail_reason="is not an NCBI Reference Gene Catalog protein accession")
 
-    invalid_hmm_dict, rows = check_values_in_list(hmm_list, hmm_accessions, 'HMM accession', rows, missing_allowed=True, fail_reason="is not an AMRFinderPlus HMM accession")
+    if not nucleotide_missing:
+        invalid_nucl_dict, rows = check_values_in_list(nucleotide_list, refseq_nucl_accessions, 'nucleotide accession', rows, missing_allowed=True, fail_reason="is not an NCBI Reference Gene Catalog nucleotide accession")
+
+    if not hmm_missing:
+        invalid_hmm_dict, rows = check_values_in_list(hmm_list, hmm_accessions, 'HMM accession', rows, missing_allowed=True, fail_reason="is not an AMRFinderPlus HMM accession")
 
     # Check that in combination, at least one of these columns has a value
     invalid_combo_dict = {}
@@ -322,6 +336,91 @@ def check_aro(aro_list, aro_terms, rows):
     return check_result, rows
     
 
+def check_variation(variation_list, rows):
+
+    variation_missing, rows = check_if_col_empty(variation_list, 'variation type', rows=rows)
+    if variation_missing:
+        print("❌ Variation type column is empty. Please provide values in this column to validate.")
+        return False, rows
+
+    variation_allowed_types = [
+            "Gene presence detected", "Protein variant detected", 
+            "Nucleotide variant detected", "Promoter variant detected", 
+            "Inactivating mutation detected", "Gene copy number variant detected", 
+            "Nucleotide variant detected in multi-copy gene", 
+            "Low frequency variant detected", "Combination"
+        ]
+
+    invalid_dict, rows = check_values_in_list(
+        value_list=variation_list,
+        allowed_values=variation_allowed_types,
+        col_name='variation type',
+        rows=rows,
+        missing_allowed=False,
+        fail_reason="is not a valid variation type"
+    )
+
+    check_result = report_check_results(
+        check_name="variation type",
+        invalid_dict=invalid_dict,
+        success_message="All variation type values are valid",
+        failure_message="Variation type column must contain a value that is not empty, NA or '-'. Variation should be one of the following types: " + ", ".join(variation_allowed_types) + "."
+    )
+
+    return check_result, rows
+
+
+def check_mutation_variation(mutation_list, variation_list, rows):
+
+    # okay, so if variation is entirely 'ENTRY MISSING', that means that this column wasn't present originally
+    # therefore no point check if mutation matches, because it just won't
+    if all(value.strip() == 'ENTRY MISSING' for value in variation_list):
+        print("❌ Variation type column is empty. This column must have values in it to compare with the mutation column.")
+        return False, rows
+    
+    # otherwise we can check. Note that if any variation_type is 'ENTRY MISSING', then we can't check if mutation is in concordance
+
+    invalid_dict = {}
+
+    for index, (mutation, variation) in enumerate(zip(mutation_list, variation_list)):
+        reason = None
+        mutation = mutation.strip()
+        variation = variation.strip()
+        if variation == 'ENTRY MISSING' or variation.startswith('CHECK VALUE'):
+            reason = "Variation type is either missing or invalid. This column must have valid values in it to compare with the mutation column."
+        elif variation == "Gene presence detected" and mutation != '-':
+            reason = "Mutation must be '-' if variation type is 'Gene presence detected'. Mutation can never be empty or NA."
+        elif variation == "Combination" and mutation != '-':
+            reason = "Mutation must be '-' if variation type is 'Combination'. Mutation can never be empty or NA."
+        elif variation == "Nucleotide variant detected" and not mutation.startswith("c."):
+            reason = "Mutation must start with 'c.' if variation type is 'Nucleotide variant detected'"
+        elif variation == "Protein variant detected" and not mutation.startswith("p."):
+            reason = "Mutation must start with 'p.' if variation type is 'Protein variant detected'"
+        elif variation == "Promoter variant detected" and not re.match(r"^c\.(-|\[-|\(-)", mutation):
+            reason = "Mutation must start with 'c.-', 'c.(-', or 'c.[-' if variation type is 'Promoter variant detected'. The - symbol indicates the position before the start of the gene where the mutation occurs."
+        elif variation == "Nucleotide variant detected in multi-copy gene" and not mutation.startswith("c."):
+            reason = "Mutation must start with 'c.' if variation type is 'Nucleotide variant detected in multi-copy gene'"
+        elif variation == "Gene copy number variant detected" and not re.match(r"^c\.\[\d+\]", mutation):
+            reason = "Mutation must be in the format 'c.[X]' where X is any number if variation type is 'Gene copy number variant detected'"
+        elif variation == "Low frequency variant detected" and not re.match(r"^(c\.|p\.)", mutation):
+            reason = "Mutation must start with either 'c.' (for nucleotide variant) or 'p.' (protein variant) if variation type is 'Low frequency variant detected'"
+        if reason:
+            invalid_dict[index] = reason
+            if mutation == '' or mutation == 'NA':
+                rows[index]['mutation'] = 'ENTRY MISSING'
+            else:
+                rows[index]['mutation'] = 'CHECK VALUE: ' + mutation
+    
+    check_result = report_check_results(
+        check_name="mutation variation",
+        invalid_dict=invalid_dict,
+        success_message="All mutation and variation type value pairs are valid",
+        failure_message="Mutation must be concordant with the variation type. For example, if variation type is 'Gene presence detected', mutation must be '-'. If variation type is 'Nucleotide variant detected', mutation must start with 'c.'."
+    )
+
+    return check_result, rows
+
+    
 
 def check_context(context_list, variation_type_list):
     # valid values are core or acquired
@@ -358,24 +457,6 @@ def check_context(context_list, variation_type_list):
         return False
 
 
-def check_mutation(mutation_list):
-    
-    print("\nChecking mutation column...")
-    
-    # check that there is either a value or '-' in this column
-    invalid_indices = [index for index, value in enumerate(mutation_list) if value.strip() == '']
-
-    if not invalid_indices:
-        print("✅ All mutation values are valid")
-        return True
-    else:
-        print(f"❌ {len(invalid_indices)} rows have failed the check")
-        print("Mutation column must contain either a value or '-' if no mutation required.")
-        for index in invalid_indices:
-            print(f"Row {index + 2}: {mutation_list[index]}")
-        return False
-
-
 def check_context_mutation(context_list, mutation_list):
     # check that if context is core, and mutation is not '-', then provide a warning
     invalid_indices = []
@@ -395,46 +476,6 @@ def check_context_mutation(context_list, mutation_list):
         "since the variant the rule applies to is not itself 'core'.")
         for index in invalid_indices:
             print(f"Row {index + 2}: {context_list[index]} and {mutation_list[index]}")
-        return False
-
-
-def check_mutation_variation(mutation_list, variation_list):
-    
-    # check that the mutation and variation type are compatible
-    print("\nChecking mutation and variation type columns are compatible...")
-
-    invalid_indices_dict = {}
-
-    for index, (mutation, variation) in enumerate(zip(mutation_list, variation_list)):
-        reason = None
-        mutation = mutation.strip()
-        variation = variation.strip()
-        if variation == "Gene presence detected" and mutation != '-':
-            reason = "Mutation must be '-' if variation type is 'Gene presence detected'"
-        elif variation == "Combination" and mutation != '-':
-            reason = "Mutation must be '-' if variation type is 'Combination'"
-        elif variation == "Nucleotide variant detected" and not mutation.startswith("c."):
-            reason = "Mutation must start with 'c.' if variation type is 'Nucleotide variant detected'"
-        elif variation == "Protein variant detected" and not mutation.startswith("p."):
-            reason = "Mutation must start with 'p.' if variation type is 'Protein variant detected'"
-        elif variation == "Promoter variant detected" and not re.match(r"^c\.(-|\[-|\(-)", mutation):
-            reason = "Mutation must start with 'c.-', 'c.(-', or 'c.[-' if variation type is 'Promoter variant detected'. The - symbol indicates the position before the start of the gene where the mutation occurs."
-        elif variation == "Nucleotide variant detected in multi-copy gene" and not mutation.startswith("c."):
-            reason = "Mutation must start with 'c.' if variation type is 'Nucleotide variant detected in multi-copy gene'"
-        elif variation == "Gene copy number variant detected" and not re.match(r"^c\.\[\d+\]", mutation):
-            reason = "Mutation must be in the format 'c.[X]' where X is any number if variation type is 'Gene copy number variant detected'"
-        elif variation == "Low frequency variant detected" and not re.match(r"^(c\.|p\.)", mutation):
-            reason = "Mutation must start with either 'c.' (for nucleotide variant) or 'p.' (protein variant) if variation type is 'Low frequency variant detected'"
-        if reason:
-            invalid_indices_dict[index + 2] = reason
-
-    if not invalid_indices_dict:
-        print("✅ All mutation and variation type values are compatible")
-        return True
-    else:
-        print(f"❌ {len(invalid_indices_dict)} rows have failed the check")
-        for index, reason in invalid_indices_dict.items():
-            print(f"Row {index}: {reason}")
         return False
 
 

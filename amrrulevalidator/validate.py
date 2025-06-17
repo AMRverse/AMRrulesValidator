@@ -127,75 +127,40 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
     # Check gene accessions
     # okay so for these columns, at least one of them must have a value
     print("\nChecking nodeID, refseq accession, GenBank accession and HMM accession columns...")
+        
+    # Print placeholder message about database version
+    print(f"\nChecking against AMRFinderPlus database version {rm.get_amrfp_db_version()}...")
 
-    accession_columns = ["nodeID", "protein accession", "nucleotide accession", "HMM accession", "variation type"]
-    if not all(col in found_columns for col in accession_columns):
-        print(f"\n❌ Spec {SPEC_VERSION} requires at least one of nodeID, protein accession, nucleotide accession, HMM accession and variation type columns to be present. We cannot validate accessions unless all columns are present. The following columns were not found:")
-        for column in accession_columns:
-            if column not in found_columns:
-                print(f"❌ {column} column not found in file.")
-        summary_checks["gene accessions"] = False
+    refseq_prot_accessions, refseq_nucl_accessions = rm.refseq_accessions()
     
-    # if they're all present, we can now validate. Note we need the variation type column as if the value in here is 'Combination', then all the accession columns can be empty
-    else:
-        
-        # Print placeholder message about database version
-        print(f"\nChecking against AMRFinderPlus database version {rm.get_amrfp_db_version()}...")
-
-        refseq_prot_accessions, refseq_nucl_accessions = rm.refseq_accessions()
-        
-        # Check accessions
-        summary_checks["gene accessions"], rows = check_id_accessions(
-            get_column("nodeID", rows), 
-            get_column("protein accession", rows), 
-            get_column("nucleotide accession", rows), 
-            get_column("HMM accession", rows), 
-            get_column("variation type", rows), 
-            refseq_prot_accessions, refseq_nucl_accessions, rm.refseq_nodes(), rm.hmm_accessions(), rows
-        )
-
-    print("Writing output file...")
-    # Write the processed rows to the output file
-    write_tsv(rows, output_p, CANONICAL_COLUMNS)
+    # Check accessions
+    summary_checks["gene accessions"], rows = check_id_accessions(
+        get_column("nodeID", rows), 
+        get_column("protein accession", rows), 
+        get_column("nucleotide accession", rows), 
+        get_column("HMM accession", rows), 
+        get_column("variation type", rows), 
+        refseq_prot_accessions, refseq_nucl_accessions, rm.refseq_nodes(), rm.hmm_accessions(), rows
+    )
 
     # Check ARO accession
     print("\nChecking ARO accession column...")
     aro_terms = rm.aro_terms()  # Get ARO terms from ResourceManager
     summary_checks["ARO accession"], rows = check_aro(get_column("ARO accession", rows), aro_terms, rows)
-    
-    # Check mutation
-    if "mutation" in found_columns:
-        summary_checks["mutation"], rows = check_mutation(get_column("mutation", rows), rows)
-    else:
-        print(f"\n❌ No mutation column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
-        summary_checks["mutation"] = False
-    
+
     # Check variation type
-    if "variation type" in found_columns:
-        variation_allowed_types = [
-            "Gene presence detected", "Protein variant detected", 
-            "Nucleotide variant detected", "Promoter variant detected", 
-            "Inactivating mutation detected", "Gene copy number variant detected", 
-            "Nucleotide variant detected in multi-copy gene", 
-            "Low frequency variant detected", "Combination"
-        ]
-        summary_checks["variation type"] = check_if_allowed_value(
-            get_column("variation type", rows), 
-            "variation type", 
-            variation_allowed_types
-        )
-    else:
-        print(f"\n❌ No variation type column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
-        summary_checks["variation type"] = False
+    print("\nChecking variation type column...")
+    summary_checks["variation type"], rows = check_variation(get_column("variation type", rows), rows)
+
+
 
     # Check mutation and variation type compatibility
-    if "variation type" in found_columns and "mutation" in found_columns:
-        summary_checks["variation type mutation concordance"] = check_mutation_variation(
-            get_column("mutation", rows), 
-            get_column("variation type", rows)
-        )
-    else:
-        summary_checks["variation type mutation concordance"] = False
+    print("\nChecking mutation and variation type columns are compatible...")
+    summary_checks["variation type mutation concordance"], rows = check_mutation_variation(
+        get_column("mutation", rows), 
+        get_column("variation type", rows), 
+        rows
+    )
 
     # Check gene context
     if "gene context" in found_columns:
@@ -219,6 +184,10 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
     else:
         print(f"\n❌ No gene context column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
         summary_checks["gene context"] = False
+
+    print("Writing output file...")
+    # Write the processed rows to the output file
+    write_tsv(rows, output_p, CANONICAL_COLUMNS)
 
     # Check drug and drug class
     if "drug" in found_columns and "drug class" in found_columns:
