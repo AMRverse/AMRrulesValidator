@@ -4,7 +4,7 @@ import csv
 import re
 from pathlib import Path
 from amrrulevalidator.utils.check_helpers import report_check_results, validate_pattern, check_values_in_list, check_if_col_empty
-from amrrulevalidator.constants import PHENOTYPE, GENE_CONTEXT, CLINICAL_CAT, BREAKPOINT_CONDITIONS, EVIDENCE_CODES
+from amrrulevalidator.constants import *
 
 
 
@@ -759,49 +759,60 @@ def check_evidence_code(evidence_code_list, rows):
     return check_result, rows
 
 
-def check_evidence_grade_limitations(evidence_grade_list, evidence_limitations_list):
+def check_evidence_grade_limitations(evidence_grade_list, evidence_limitations_list, rows):
 
-    print("\nChecking evidence grade and limitations columns...")
+    grade_missing, rows = check_if_col_empty(evidence_grade_list, 'evidence grade', rows=rows)
+    limitations_missing, rows = check_if_col_empty(evidence_limitations_list, 'evidence limitations', rows=rows)
 
-    allowable_grades = ["strong", "moderate", "weak"]
-    allowable_limitations = ["lacks evidence for this species", "lacks evidence for this genus", "lacks evidence for this allele", "lacks evidence of the degree to which MIC is affected", "low clinical relevance", "unknown clinical relevance", "statistical geno/pheno evidence but no experimental evidence"]
+    # if both are missing, then return False
+    if grade_missing and limitations_missing:
+        print("❌ Evidence grade and limitations columns are empty. Please provide values in these columns to validate.")
+        return False, rows
     
-    invalid_indices_grades = []
-    invalid_indices_limitations = []
-
-    for index, (grade, limitations) in enumerate(zip(evidence_grade_list, evidence_limitations_list)):
-        grade = grade.strip()
-        limitations = limitations.strip()
-        if grade not in allowable_grades:
-            invalid_indices_grades.append(index)
-            #print(f"Invalid evidence grade at row {index + 1}: {grade}")
-        
-        if grade in ["moderate", "weak"]:
-            if limitations == '' or limitations == '-':
-                invalid_indices_limitations.append(index)
-            else:
-                # Split limitations by comma and check each one
+    # if grade isn't missing, it's a required col, so we can check that the value is in the list of allowable values
+    invalid_grade_dict = {}
+    if not grade_missing:
+        invalid_grade_dict, rows = check_values_in_list(
+            value_list=evidence_grade_list,
+            allowed_values=EVIDENCE_GRADES,
+            col_name='evidence grade',
+            rows=rows,
+            missing_allowed=False,
+            fail_reason="is not a valid evidence grade"
+        )
+    # we can check limitations on its own, and make sure it's an allowed value
+    invalid_limitations_dict = {}
+    if not limitations_missing:
+        # we need to split out the values one by one
+        for index, value in enumerate(evidence_limitations_list):
+            limitations = value.strip()
+            if limitations in ['NA', '']:
+                rows[index]['evidence limitations'] = 'ENTRY MISSING'
+                invalid_limitations_dict[index] = "Evidence limitations is empty or 'NA', should be '-' if no value required"
+                continue
+            if limitations != '-':
                 limitation_values = [lim.strip() for lim in limitations.split(',')]
-                if not all(lim in allowable_limitations for lim in limitation_values):
-                    invalid_indices_limitations.append(index)
+                # check that all limitations are in the list of allowable limitations
+                if not all(lim in EVIDENCE_LIMITATIONS for lim in limitation_values):
+                    invalid_limitations_dict[index] = f"Evidence limitations '{limitations}' contains values that are not in the list of allowable limitations. Multiple limitations must be separated by a comma, or this check will fail."
+                    rows[index]['evidence limitations'] = 'CHECK VALUE: ' + limitations
+        
+    # now check that if grade is 'moderate', 'low', or 'very low', then limitations is not empty
+    if not grade_missing and not limitations_missing:
+        for index, (grade, limitations) in enumerate(zip(evidence_grade_list, evidence_limitations_list)):
+            grade = grade.strip()
+            limitations = limitations.strip()
+            # only check the row if we haven't flagged it as invalid already
+            if not limitations.startswith('CHECK VALUE') and index not in invalid_grade_dict.keys():
+                if grade in ["moderate", "low", "very low"] and limitations in ['-', 'ENTRY MISSING']:
+                        invalid_limitations_dict[index] = f"If evidence grade is '{grade}', evidence limitations must contain a value, not '-' or 'ENTRY MISSING'."
+                        rows[index]['evidence limitations'] = 'CHECK VALUE: ' + limitations
 
-    if not invalid_indices_grades:
-        print("✅ All evidence grades are valid")
-    if not invalid_indices_limitations:
-        print("✅ All evidence limitations are valid")
+    check_result = report_check_results(
+        check_name="evidence grade and limitations",
+        invalid_dict={**invalid_grade_dict, **invalid_limitations_dict},
+        success_message="All evidence grade and limitations values are valid",
+        failure_message="Evidence grade must be one of the following: " + ", ".join(EVIDENCE_GRADES) + ". Evidence limitations must be one of the following: " + ", ".join(EVIDENCE_LIMITATIONS) + ". If evidence grade is 'moderate', 'low', or 'very low', then evidence limitations must contain a value, not '-'. If evidence limitations is empty, it should be '-', not 'ENTRY MISSING'."
+    )
     
-    if invalid_indices_grades or invalid_indices_limitations:
-        print(f"❌ {len(invalid_indices_grades) + len(invalid_indices_limitations)} rows have failed the check")
-        if invalid_indices_grades:
-            print("Evidence grade column must contain one of the following values:\n" + ", ".join(allowable_grades))
-            for index in invalid_indices_grades:
-                print(f"Row {index + 2}: {evidence_grade_list[index]}")
-        if invalid_indices_limitations:
-            print("If evidence grade is 'moderate' or 'weak', evidence limitations column must contain one of the following values: " + ", ".join(allowable_limitations))
-            for index in invalid_indices_limitations:
-                print(f"Row {index + 2}: {evidence_limitations_list[index]}")
-    
-    if not invalid_indices_grades and not invalid_indices_limitations:
-        return True
-    else:
-        return False
+    return check_result, rows
