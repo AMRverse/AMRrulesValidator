@@ -233,11 +233,6 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
     print("Writing output file...")
     # Write the processed rows to the output file
     write_tsv(rows, output_p, CANONICAL_COLUMNS)
-    
-    # Normalize blank values (convert empty strings and "NA" to "-")
-    #rows = _normalize_blanks(rows)
-    
-    # Flag missing values (replace "-" with "ENTRY MISSING")
-    #rows = _flag_missing(rows)
+
     
     return True
