@@ -4,7 +4,7 @@ import csv
 import re
 from pathlib import Path
 from amrrulevalidator.utils.check_helpers import report_check_results, validate_pattern, check_values_in_list, check_if_col_empty
-from amrrulevalidator.constants import PHENOTYPE, GENE_CONTEXT, CLINICAL_CAT
+from amrrulevalidator.constants import PHENOTYPE, GENE_CONTEXT, CLINICAL_CAT, BREAKPOINT_CONDITIONS
 
 
 
@@ -646,6 +646,64 @@ def check_bp_standard(breakpoint_standard_list, rows):
         success_message="All breakpoint standard values match expected patterns.",
         failure_message=failure_message,
         unique_values=unique_values
+    )
+
+    return check_result, rows
+
+
+def check_bp_condition(breakpoint_condition_list, rows):
+
+    bp_condition_missing, rows = check_if_col_empty(breakpoint_condition_list, 'breakpoint condition', rows)
+
+    if bp_condition_missing:
+        print("❌ Breakpoint condition column is empty. Please provide values in this column to validate.")
+        return False, rows
+
+    invalid_dict, rows = check_values_in_list(
+        value_list=breakpoint_condition_list,
+        allowed_values=BREAKPOINT_CONDITIONS,
+        col_name='breakpoint condition',
+        rows=rows,
+        missing_allowed=True,
+        fail_reason="is not a valid breakpoint condition"
+    )
+
+    check_result = report_check_results(
+        check_name="breakpoint condition",
+        invalid_dict=invalid_dict,
+        success_message="All breakpoint condition values are valid",
+        failure_message="Breakpoint condition must be one of the following: " + ", ".join(BREAKPOINT_CONDITIONS) + "."
+    )
+
+    return check_result, rows
+
+
+def check_PMID(pmid_list, rows):
+
+    pmid_missing, rows = check_if_col_empty(pmid_list, 'PMID', rows)
+
+    if pmid_missing:
+        print("❌ PMID column is empty. Please provide values in this column to validate.")
+        return False, rows
+    
+    # Check that PMID values are present and not empty, NA, or '-'
+    invalid_dict = {}
+    for index, pmid in enumerate(pmid_list):
+        pmid = pmid.strip()
+        if pmid in ['NA', '']:
+            rows[index]['PMID'] = 'ENTRY MISSING'
+            invalid_dict[index] = "PMID is empty or 'NA'."
+            continue
+        if pmid == "-":
+            rows[index]['PMID'] = 'CHECK VALUE: ' + pmid
+            invalid_dict[index] = "PMID is '-', however most rules should have a PMID associated with them."
+            continue
+
+    check_result = report_check_results(
+        check_name="PMID",
+        invalid_dict=invalid_dict,
+        success_message="All PMIDs are valid",
+        failure_message="PMID column must contain a value that is not empty, NA or '-'. PMIDs should be positive integers."
     )
 
     return check_result, rows

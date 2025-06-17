@@ -11,3 +11,13 @@ PHENOTYPE = ['wildtype', 'nonwildtype']
 GENE_CONTEXT = ['core', 'acquired']
 
 CLINICAL_CAT = ["S", "I", "R"]
+
+BREAKPOINT_CONDITIONS = [
+            "-", "Endocarditis", "Endocarditis with combination treatment",
+            "Intravenous", "Meningitis", "Meningitis, Endocarditis",
+            "Non-endocarditis", "Non-meningitis", "Non-meningitis, Non-endocarditis",
+            "Non-pneumonia", "Oral", "Oral, Infections originating from the urinary tract",
+            "Oral, Other indications", "Oral, Uncomplicated urinary tract infection",
+            "Pneumonia", "Prophylaxis", "Respiratory", "Screen", "Skin",
+            "Uncomplicated urinary tract infection"
+        ]

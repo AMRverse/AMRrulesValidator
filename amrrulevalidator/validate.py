@@ -195,38 +195,16 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
 
     # Check breakpoint standard
     print("\nChecking breakpoint standard column...")
-    summary_checks["breakpoint standard"] = check_bp_standard(get_column("breakpoint standard", rows), rows)
+    summary_checks["breakpoint standard"], rows = check_bp_standard(get_column("breakpoint standard", rows), rows)
     
     # Check breakpoint condition
-    if "breakpoint condition" in found_columns:
-        breakpoint_condition_list = [
-            "-", "Endocarditis", "Endocarditis with combination treatment",
-            "Intravenous", "Meningitis", "Meningitis, Endocarditis",
-            "Non-endocarditis", "Non-meningitis", "Non-meningitis, Non-endocarditis",
-            "Non-pneumonia", "Oral", "Oral, Infections originating from the urinary tract",
-            "Oral, Other indications", "Oral, Uncomplicated urinary tract infection",
-            "Pneumonia", "Prophylaxis", "Respiratory", "Screen", "Skin",
-            "Uncomplicated urinary tract infection"
-        ]
-        summary_checks["breakpoint condition"] = check_if_allowed_value(
-            get_column("breakpoint condition", rows), 
-            "breakpoint condition", 
-            breakpoint_condition_list, 
-            missing_allowed=True
-        )
-    else:
-        print(f"\n❌ No breakpoint condition column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
-        summary_checks["breakpoint condition"] = False
+    print("\nChecking breakpoint condition column...")
+    summary_checks["breakpoint condition"], rows = check_bp_condition(get_column("breakpoint condition", rows), rows)
 
     # Check PMID
-    if "PMID" in found_columns:
-        summary_checks["PMID"] = check_if_not_missing(
-            get_column("PMID", rows), 
-            "PMID"
-        )
-    else:
-        print(f"\n❌ No PMID column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
-        summary_checks["PMID"] = False
+    print("\nChecking PMID column...")
+    summary_checks["PMID"] = check_PMID(get_column("PMID", rows), rows)
+
 
     # Check evidence code
     if "evidence code" in found_columns:
