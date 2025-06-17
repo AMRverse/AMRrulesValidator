@@ -45,6 +45,10 @@ class ResourceManager:
         self._drug_names_cache: Optional[list] = None
         self._drug_classes_cache: Optional[list] = None
         self._amrfp_db_version: Optional[str] = None
+        self._refseq_nodes_cache: Optional[list] = None
+        self._refseq_prot_cache: Optional[list] = None
+        self._refseq_nucl_cache: Optional[list] = None
+        self._hmm_accessions_cache: Optional[list] = None
     
     def aro_terms(self) -> list:
         """Get ARO terms from cached OBO file, loading if necessary."""
@@ -57,6 +61,94 @@ class ResourceManager:
                 self._aro_terms_cache = []
         return self._aro_terms_cache
     
+    def refseq_nodes(self) -> list:
+
+        if self._refseq_nodes_cache is None:
+            refseq_file = self.dir / "ReferenceGeneHierarchy.txt"
+            if refseq_file.exists():
+                self._refseq_nodes_cache = self._load_refseq_nodes(str(refseq_file))
+            else:
+                # Return empty list if file doesn't exist yet
+                self._refseq_nodes_cache = []
+        return self._refseq_nodes_cache
+
+    def _load_refseq_nodes(self, node_file: str):
+        """Load RefSeq nodes from the given file."""
+        self._refseq_nodes_cache = []
+
+        refseq_hierarchy = csv.DictReader(open(node_file, 'r'), delimiter='\t')
+        for row in refseq_hierarchy:
+            if "parent_node_id" in row:
+                self._refseq_nodes_cache.append(row["parent_node_id"])
+            if "node_id" in row:
+                self._refseq_nodes_cache.append(row["node_id"])
+        # remove any duplicates and empty strings
+        self._refseq_nodes_cache = set(self._refseq_nodes_cache)
+        self._refseq_nodes_cache = [value for value in self._refseq_nodes_cache if value != ""]
+
+        return self._refseq_nodes_cache
+    
+    def refseq_accessions(self) -> list:
+
+        if self._refseq_prot_cache is None and self._refseq_nucl_cache is None:
+            refseq_file = self.dir / "ReferenceGeneCatalog.txt"
+            if refseq_file.exists():
+                self._refseq_prot_cache, self._refseq_nucl_cache = self._load_refseq_accessions(str(refseq_file))
+            else:
+                # Return empty lists if file doesn't exist yet
+                self._refseq_prot_cache = []
+                self._refseq_nucl_cache = []
+        
+        return self._refseq_prot_cache, self._refseq_nucl_cache
+    
+    def _load_refseq_accessions(self, refseq_file: str):
+        """Load RefSeq and GenBank accessions from the given file."""
+        self._refseq_prot_cache = []
+        self._refseq_nucl_cache = []
+
+        refseq = csv.DictReader(open(refseq_file, 'r'), delimiter='\t')
+        for row in refseq:
+            if "refseq_protein_accession" in row:
+                self._refseq_prot_cache.append(row["refseq_protein_accession"])
+            if "refseq_nucleotide_accession" in row:
+                self._refseq_nucl_cache.append(row["refseq_nucleotide_accession"])
+            if "genbank_protein_accession" in row:
+                self._refseq_prot_cache.append(row["genbank_protein_accession"])
+            if "genbank_nucleotide_accession" in row:
+                self._refseq_nucl_cache.append(row["genbank_nucleotide_accession"])
+        # remove any empty strings
+        self._refseq_prot_cache = [value for value in self._refseq_prot_cache if value != ""]
+        self._refseq_nucl_cache = [value for value in self._refseq_nucl_cache if value != ""]
+
+        return self._refseq_prot_cache, self._refseq_nucl_cache
+    
+    def hmm_accessions(self) -> list:
+
+        if self._hmm_accessions_cache is None:
+            hmm_file = self.dir / "NCBIfam-AMRFinder.tsv"
+            if hmm_file.exists():
+                self._hmm_accessions_cache = self._get_hmm_accessions(str(hmm_file))
+            else:
+                # Return empty list if file doesn't exist yet
+                self._hmm_accessions_cache = []
+
+        return self._hmm_accessions_cache
+    
+    def _get_hmm_accessions(self, hmm_file: str) -> list:
+        """Get HMM accessions from the NCBIfam-AMRFinder file."""
+        
+        self._hmm_accessions_cache = []
+        with open(hmm_file, 'r', newline='') as file:
+            reader = csv.DictReader(file, delimiter='\t')
+            for row in reader:
+                if 'HMM Accession' in row and row['HMM Accession'].strip():
+                    self._hmm_accessions_cache.append(row['HMM Accession'].strip())
+        
+        # remove any empty strings
+        self._hmm_accessions_cache  = [value for value in self._hmm_accessions_cache if value != ""]
+
+        return self._hmm_accessions_cache
+
     def _load_drug_data(self):
         """Load drug data from card_drug_names.tsv if it exists."""
         drug_names_file = self.dir / "card_drug_names.tsv"

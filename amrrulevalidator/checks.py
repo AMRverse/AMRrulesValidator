@@ -256,57 +256,20 @@ def check_gene(gene_list, rule_list, rows):
     return check_result, rows
 
 
-def check_id_accessions(nodeID_list, protein_list, nucleotide_list, hmm_list, variation_type_list, refseq_file, node_file, hmm_file, rows):
+def check_id_accessions(nodeID_list, protein_list, nucleotide_list, hmm_list, variation_type_list, refseq_prot_accessions, refseq_nucl_accessions, refseq_node_ids, hmm_accessions, rows):
     
-    # parse the refseq file - get the refseq nucl and prot accessions, genbank accessions and hmm accessions to check against
-    # Combine the nucl and prot accessions together
-    protein_accessions = [] 
-    nucleotide_accessions = []
-    refseq = csv.DictReader(open(refseq_file, 'r'), delimiter='\t')
-    for row in refseq:
-        if "refseq_protein_accession" in row:
-            protein_accessions.append(row["refseq_protein_accession"])
-        if "refseq_nucleotide_accession" in row:
-            nucleotide_accessions.append(row["refseq_nucleotide_accession"])
-        if "genbank_protein_accession" in row:
-            protein_accessions.append(row["genbank_protein_accession"])
-        if "genbank_nucleotide_accession" in row:
-            nucleotide_accessions.append(row["genbank_nucleotide_accession"])
-    # remove any empty strings
-    protein_accessions = [value for value in protein_accessions if value != ""]
-    nucleotide_accessions = [value for value in nucleotide_accessions if value != ""]
-
-    refseq_node_ids = []
-    refseq_hierarchy = csv.DictReader(open(node_file, 'r'), delimiter='\t')
-    for row in refseq_hierarchy:
-        if "parent_node_id" in row:
-            refseq_node_ids.append(row["parent_node_id"])
-        if "node_id" in row:
-            refseq_node_ids.append(row["node_id"])
-    # remove any duplicates and empty strings
-    refseq_node_ids = set(refseq_node_ids)
-    refseq_node_ids = [value for value in refseq_node_ids if value != ""]
-
-    hmm_accessions = []
-    hmm_table = csv.DictReader(open(hmm_file, newline=''), delimiter='\t')
-    for row in hmm_table:
-        if "#hmm_accession" in row:
-            hmm_accessions.append(row["#hmm_accession"])
-    # remove any empty strings
-    hmm_accessions  = [value for value in hmm_accessions if value != ""]
-
     # now check individual columns for allowable values
     # this function is actually multiple smaller checks
     # for each list, if any value is NA or empty, we should replace with ENTRY MISSING, as there should be a dash
     # secondly, if any value is not empty, a dash, or ENTRY MISSING, we should check if it's in the relevant accession list
     # finally, any rows that have all values empty, NA, '-' or ENTRY MISSING should be checked to see if they have variation type 'Combination'
     # this would make that row valid. Otherwise, the row is invalid
-    
+
     invalid_node_dict, rows = check_values_in_list(nodeID_list, refseq_node_ids, 'nodeID', rows, missing_allowed=True, fail_reason="is not a valid NCBI Reference Gene Hierarchy node ID")
 
-    invalid_prot_dict, rows = check_values_in_list(protein_list, protein_accessions, 'protein accession', rows, missing_allowed=True, fail_reason="is not an NCBI Reference Gene Catalog protein accession")
+    invalid_prot_dict, rows = check_values_in_list(protein_list, refseq_prot_accessions, 'protein accession', rows, missing_allowed=True, fail_reason="is not an NCBI Reference Gene Catalog protein accession")
 
-    invalid_nucl_dict, rows = check_values_in_list(nucleotide_list, nucleotide_accessions, 'nucleotide accession', rows, missing_allowed=True, fail_reason="is not an NCBI Reference Gene Catalog nucleotide accession")
+    invalid_nucl_dict, rows = check_values_in_list(nucleotide_list, refseq_nucl_accessions, 'nucleotide accession', rows, missing_allowed=True, fail_reason="is not an NCBI Reference Gene Catalog nucleotide accession")
 
     invalid_hmm_dict, rows = check_values_in_list(hmm_list, hmm_accessions, 'HMM accession', rows, missing_allowed=True, fail_reason="is not an AMRFinderPlus HMM accession")
 
@@ -331,38 +294,33 @@ def check_id_accessions(nodeID_list, protein_list, nucleotide_list, hmm_list, va
 
     return check_result, rows
 
-def check_aro(aro_list, aro_terms):
+def check_aro(aro_list, aro_terms, rows):
+
+    aro_missing, rows = check_if_col_empty(aro_list, 'ARO accession', rows=rows)
+
+    if aro_missing:
+        print("❌ ARO accession column is empty. Please provide values in this column to validate.")
+        return False, rows
     
-    print("\nChecking ARO accession column...")
+    #check_values_in_list(value_list, allowed_values, col_name, rows, missing_allowed=False, fail_reason=None)
+    invalid_dict, rows = check_values_in_list(
+        value_list=aro_list,
+        allowed_values=aro_terms,
+        col_name='ARO accession',
+        rows=rows,
+        missing_allowed=True,
+        fail_reason="is not a valid ARO accession"
+    )
 
-    # value is invalid if doesn't start with ARO or isn't '-'
-    # need to expand this as well to check if the ARO accessions in the list are actually ones that exist in the CARD ontology.
-    invalid_indices = []
-    for index, value in enumerate(aro_list):
-        value = value.strip()
-        # a dash is fine
-        if value == '-':
-            continue
-        # if the value is an accession, check it
-        if value.startswith("ARO:"):
-            if value not in aro_terms:
-                invalid_indices.append(index)
-        # the cell can't be empty, if it's empty it must be '-' (checked above)
-        elif value == '' or value == 'NA':
-            invalid_indices.append(index)
-        # if it's anything else then it's invalid
-        else:
-            invalid_indices.append(index)
+    check_result = report_check_results(
+        check_name="ARO accession",
+        invalid_dict=invalid_dict,
+        success_message="All ARO accessions are valid",
+        failure_message="ARO accession column must contain a value that is not empty, NA or '-'. ARO accessions should be in the ARO ontology list, as per file resources/aro_terms.tsv."
+    )
 
-    if not invalid_indices:
-        print("✅ All ARO accession values are valid and exist in the CARD ontology")
-        return True
-    else:
-        print(f"❌ {len(invalid_indices)} rows have failed the check")
-        print("ARO accession column must contain a valid ARO accession, starting with 'ARO:', and cannot be empty. The following rows contain invalid or empty accessions:")
-        for index in invalid_indices:
-            print(f"Row {index + 2}: {aro_list[index]}")
-        return False
+    return check_result, rows
+    
 
 
 def check_context(context_list, variation_type_list):

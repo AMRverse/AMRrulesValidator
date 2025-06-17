@@ -138,12 +138,11 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
     
     # if they're all present, we can now validate. Note we need the variation type column as if the value in here is 'Combination', then all the accession columns can be empty
     else:
-        refseq_file = rm.dir / "ReferenceGeneCatalog.txt"
-        amrfp_nodes = rm.dir / "ReferenceGeneHierarchy.txt"
-        hmm_file = rm.dir / "NCBIfam-AMRFinder.tsv"
         
         # Print placeholder message about database version
         print(f"\nChecking against AMRFinderPlus database version {rm.get_amrfp_db_version()}...")
+
+        refseq_prot_accessions, refseq_nucl_accessions = rm.refseq_accessions()
         
         # Check accessions
         summary_checks["gene accessions"], rows = check_id_accessions(
@@ -152,7 +151,7 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
             get_column("nucleotide accession", rows), 
             get_column("HMM accession", rows), 
             get_column("variation type", rows), 
-            refseq_file, amrfp_nodes, hmm_file, rows
+            refseq_prot_accessions, refseq_nucl_accessions, rm.refseq_nodes(), rm.hmm_accessions(), rows
         )
 
     print("Writing output file...")
@@ -160,16 +159,13 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
     write_tsv(rows, output_p, CANONICAL_COLUMNS)
 
     # Check ARO accession
-    if "ARO accession" in found_columns:
-        aro_terms = rm.aro_terms()  # Get ARO terms from ResourceManager
-        summary_checks["ARO accession"] = check_aro(get_column("ARO accession", rows), aro_terms)
-    else:
-        print(f"\n❌ No ARO accession column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
-        summary_checks["ARO accession"] = False
+    print("\nChecking ARO accession column...")
+    aro_terms = rm.aro_terms()  # Get ARO terms from ResourceManager
+    summary_checks["ARO accession"], rows = check_aro(get_column("ARO accession", rows), aro_terms, rows)
     
     # Check mutation
     if "mutation" in found_columns:
-        summary_checks["mutation"] = check_mutation(get_column("mutation", rows))
+        summary_checks["mutation"], rows = check_mutation(get_column("mutation", rows), rows)
     else:
         print(f"\n❌ No mutation column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
         summary_checks["mutation"] = False
