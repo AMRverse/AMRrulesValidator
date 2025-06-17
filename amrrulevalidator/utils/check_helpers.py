@@ -50,26 +50,19 @@ def report_check_results(check_name, invalid_indices=None, invalid_dict=None,
         return False
 
 
-def validate_pattern(value_list, patterns, field_name=None):
-    """
-    Validate values against a list of regex patterns.
-    
-    Args:
-        value_list: List of values to validate
-        patterns: List of regex patterns to match against
-        field_name: Optional field name for error messages
-    
-    Returns:
-        dict: Dictionary of invalid indices with reasons
-    """
+def validate_pattern(value_list, patterns, rows, col_name, missing_allowed=False):
+
     invalid_indices = {}
     for index, value in enumerate(value_list):
         value = value.strip()
-        if value == '' or value in ['NA', '-']:
-            continue
-        if not any(re.match(pattern, value) for pattern in patterns):
-            invalid_indices[index + 2] = value
-    return invalid_indices
+        if not missing_allowed and (value == '' or value == 'NA'):
+            rows[index][col_name] = 'ENTRY MISSING'
+            invalid_indices[index] = f"Value in {col_name}"
+        if not any(re.match(pattern, value) for pattern in patterns) or value == '-':
+            invalid_indices[index] = f"Value '{value}' in {col_name} does not match the expected patterns"
+            rows[index][col_name] = f'CHECK VALUE: {value}'
+    
+    return invalid_indices, rows
 
 
 def check_values_in_list(value_list, allowed_values, col_name, rows, missing_allowed=False, fail_reason=None):
@@ -94,7 +87,7 @@ def check_values_in_list(value_list, allowed_values, col_name, rows, missing_all
     for index, value in enumerate(value_list):
         value = value.strip()
         if not missing_allowed and value in ['NA', '-', '']:
-            invalid_dict[index] = f"Missing value"
+            invalid_dict[index] = f"Missing value in {col_name}"
             rows[index][col_name] = 'ENTRY MISSING'
             continue
         if value not in allowed_values:

@@ -569,55 +569,60 @@ def check_clinical(clinical_cat_list, rows):
 
     return check_result, rows
 
-def check_sir_breakpoint(clinical_category_list, breakpoint_list):
-    """
-    Check that clinical category (S/I/R) and breakpoint values are compatible.
-    
-    Args:
-        clinical_category_list: List of clinical category values (S, I, R)
-        breakpoint_list: List of breakpoint values
-        
-    Returns:
-        bool: True if check passed, False otherwise
-    """
-    
-    print("\nChecking clinical category and breakpoint columns...")
 
-    invalid_indices_dict = {}
+def check_breakpoint(breakpoint_list, clinical_cat_list, rows):
 
-    for index, (category, breakpoint) in enumerate(zip(clinical_category_list, breakpoint_list)):
-        reason = None
-        category = category.strip()
+    breakpoint_missing, rows = check_if_col_empty(breakpoint_list, 'breakpoint', rows)
+
+    if breakpoint_missing:
+        print("❌ Breakpoint column is empty. Please provide values in this column to validate.")
+        return False, rows
+    
+    # otherwise, we can check the column itself, and then in combo with clinical category if that column has at least some values
+    # breakpoint can be not applicable, but it can't be empty, NA, or '-'
+    invalid_dict_breakpoint = {}
+    for index, breakpoint in enumerate(breakpoint_list):
         breakpoint = breakpoint.strip()
-        
-        if category == 'S' and not any(breakpoint.startswith(prefix) for prefix in ['MIC <', 'MIC <=', 'disk >', 'not applicable']):
-            reason = "If clinical category is 'S', breakpoint should contain a value of 'MIC <', 'MIC <=', or 'disk >'. 'not applicable' is an allowed value if no breakpoint is available due to expected resistances."
-        if category == 'R' and not any(breakpoint.startswith(prefix) for prefix in ['MIC >', 'MIC >=', 'disk <', 'not applicable']):
-            reason = "If clinical category is 'R', breakpoint should contain a value of 'MIC >', 'MIC >=', or 'disk <'. 'not applicable' is an allowed value if no breakpoint is available due to expected resistances."
-            
-        if reason:
-            invalid_indices_dict[index + 2] = reason
+        if breakpoint in ['NA', '', '-']:
+            rows[index]['breakpoint'] = 'ENTRY MISSING'
+            invalid_dict_breakpoint[index] = "Breakpoint is empty, 'NA', or '-'. Breakpoint should contain information about the MIC or disk breakpoint, or 'not applicable' if no breakpoint is available."
+            continue
+        # if the breakpoint is not empty, we can check that it starts with one of the expected prefixes
+        if not any(breakpoint.startswith(prefix) for prefix in ['MIC <', 'MIC <=', 'disk >', 'MIC >', 'MIC >=', 'disk <', 'not applicable']):
+            invalid_dict_breakpoint[index] = f"Breakpoint '{breakpoint}' does not start with an expected prefix (MIC <, MIC <=, disk >, MIC >, MIC >=, disk <, not applicable)."
+            rows[index]['breakpoint'] = 'CHECK VALUE: ' + breakpoint
+            continue
+        # now check if breakpoint matches what we'd expected for the clinical category, only if clinical category isn't completely empty
+        if not all(value.strip() == 'ENTRY MISSING' for value in clinical_cat_list):
+            category = clinical_cat_list[index].strip()
+            reason = None
+            if category == 'S' and not any(breakpoint.startswith(prefix) for prefix in ['MIC <', 'MIC <=', 'disk >', 'not applicable']):
+                reason = "If clinical category is 'S', breakpoint should contain a value of 'MIC <', 'MIC <=', or 'disk >'. 'not applicable' is an allowed value if no breakpoint is available due to expected resistances."
+            if category == 'R' and not any(breakpoint.startswith(prefix) for prefix in ['MIC >', 'MIC >=', 'disk <', 'not applicable']):
+                reason = "If clinical category is 'R', breakpoint should contain a value of 'MIC >', 'MIC >=', or 'disk <'. 'not applicable' is an allowed value if no breakpoint is available due to expected resistances."
+            if category == 'ENTRY MISSING' or category.startswith('CHECK VALUE'):
+                reason = "Clinical category is missing or invalid, so breakpoint cannot be validated. Please provide clinical category to validate this row properly."
+            if reason:
+                invalid_dict_breakpoint[index] = reason
+                rows[index]['breakpoint'] = 'CHECK VALUE: ' + breakpoint
 
-    return report_check_results(
+    check_result = report_check_results(
         check_name="clinical category and breakpoint",
-        invalid_dict=invalid_indices_dict,
+        invalid_dict=invalid_dict_breakpoint,
         success_message="All clinical category and breakpoint values are concordant",
         failure_message="Clinical category and breakpoint values must be compatible."
     )
 
+    return check_result, rows
 
-def check_bp_standard(breakpoint_standard_list):
-    """
-    Check that breakpoint standard values match expected patterns.
-    
-    Args:
-        breakpoint_standard_list: List of breakpoint standard values to check
-        
-    Returns:
-        bool: True if check passed, False otherwise
-    """
-    
-    print("\nChecking breakpoint standard column...")
+
+def check_bp_standard(breakpoint_standard_list, rows):
+
+    bp_standard_missing, rows = check_if_col_empty(breakpoint_standard_list, 'breakpoint standard', rows)
+
+    if bp_standard_missing:
+        print("❌ Breakpoint standard column is empty. Please provide values in this column to validate.")
+        return False, rows
     
     # Allowable patterns for breakpoint standards
     suggested_values = [
@@ -626,8 +631,8 @@ def check_bp_standard(breakpoint_standard_list):
         r'^EUCAST Expected Resistant Phenotypes v\d+(\.\d+)? \(\d{4}\)$',  # EUCAST Expected Resistant Phenotypes version (year)
         r'^(EUCAST|CLSI)\s+v\d+(\.\d+)?\s+\(\d{4}\)$'  # EUCAST/CLSI version (year)
     ]
-    
-    invalid_dict = validate_pattern(breakpoint_standard_list, suggested_values)
+
+    invalid_dict, rows = validate_pattern(breakpoint_standard_list, suggested_values, rows, 'breakpoint standard', missing_allowed=False)
     unique_values = set(breakpoint_standard_list)
     
     failure_message = ("We check for the following formats: ECOFF (Month Year), "
@@ -635,13 +640,15 @@ def check_bp_standard(breakpoint_standard_list):
                       "EUCAST Expected Resistant Phenotypes vX (year), "
                       "or EUCAST/CLSI vX (year).")
     
-    return report_check_results(
+    check_result = report_check_results(
         check_name="breakpoint standard",
         invalid_dict=invalid_dict,
         success_message="All breakpoint standard values match expected patterns.",
         failure_message=failure_message,
         unique_values=unique_values
     )
+
+    return check_result, rows
 
 
 def check_evidence_code(evidence_code_list):

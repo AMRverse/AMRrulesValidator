@@ -186,37 +186,16 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
     print("\nChecking clinical category column...")
     summary_checks["clinical category"], rows = check_clinical(get_column("clinical category", rows), rows)
 
-    print("Writing output file...")
-    # Write the processed rows to the output file
-    write_tsv(rows, output_p, CANONICAL_COLUMNS)
-
-    # Check breakpoint
-    if "breakpoint" in found_columns:
-        summary_checks["breakpoint"] = check_if_not_missing(
-            get_column("breakpoint", rows), 
-            "breakpoint"
-        )
-    else:
-        print(f"\n❌ No breakpoint column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
-        summary_checks["breakpoint"] = False
-
-    # Check clinical category and breakpoint concordance
-    if "clinical category" in found_columns and "breakpoint" in found_columns:
-        summary_checks["clinical category and breakpoint concordance"] = check_sir_breakpoint(
-            get_column("clinical category", rows), 
-            get_column("breakpoint", rows)
-        )
-    else:
-        summary_checks["clinical category and breakpoint concordance"] = False
+    print("\nChecking breakpoint column...")
+    summary_checks["breakpoint"], rows = check_breakpoint(
+        get_column("breakpoint", rows), 
+        get_column("clinical category", rows), 
+        rows
+    )
 
     # Check breakpoint standard
-    if "breakpoint standard" in found_columns:
-        summary_checks["breakpoint standard"] = check_bp_standard(
-            get_column("breakpoint standard", rows)
-        )
-    else:
-        print(f"\n❌ No breakpoint standard column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
-        summary_checks["breakpoint standard"] = False
+    print("\nChecking breakpoint standard column...")
+    summary_checks["breakpoint standard"] = check_bp_standard(get_column("breakpoint standard", rows), rows)
     
     # Check breakpoint condition
     if "breakpoint condition" in found_columns:
@@ -286,15 +265,15 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
     
     # Process data for output
     print("\nProcessing data for output...")
-    
-    # Normalize blank values (convert empty strings and "NA" to "-")
-    rows = _normalize_blanks(rows)
-    
-    # Flag missing values (replace "-" with "ENTRY MISSING")
-    rows = _flag_missing(rows)
-    
+
     print("Writing output file...")
     # Write the processed rows to the output file
     write_tsv(rows, output_p, CANONICAL_COLUMNS)
+    
+    # Normalize blank values (convert empty strings and "NA" to "-")
+    #rows = _normalize_blanks(rows)
+    
+    # Flag missing values (replace "-" with "ENTRY MISSING")
+    #rows = _flag_missing(rows)
     
     return True
