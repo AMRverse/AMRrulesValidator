@@ -137,6 +137,7 @@ def check_txid(txid_list, rows, ncbi_organism_dict):
 
     return True, check_result, rows
 
+
 def check_organism(organism_list, rows, ncbi_organism_dict):
 
     org_missing, rows = check_if_col_empty(organism_list, 'organism', rows=rows)
@@ -181,6 +182,7 @@ def check_organism(organism_list, rows, ncbi_organism_dict):
 
     return True, check_result, rows
 
+
 def check_txid_organism(txid_list, organism_list, rows, ncbi_organism_dict):
   
     # this check will only occur if both columns are present
@@ -210,49 +212,48 @@ def check_txid_organism(txid_list, organism_list, rows, ncbi_organism_dict):
     return check_result, rows
 
 
-def check_gene(gene_list, rule_list):
+def check_gene(gene_list, rule_list, rows):
     
-    print("\nChecking gene column...")
-    
-    # want to check if any values are missing, NA, or '-', and return which index number in the list where that's the case
-    invalid_indices = [index for index, value in enumerate(gene_list) if value == '' or value in ['NA', '-']]
+    # first check if the gene column is empty
+    gene_missing, rows = check_if_col_empty(gene_list, 'gene', rows=rows)
 
-    if not invalid_indices:
-        print("✅ All gene values are valid")
-    else:
-        print(f"❌ {len(invalid_indices)} rows have failed the check")
-        print("Gene names must be present, not 'NA' or '-'")
-        for index in invalid_indices:
-            print(f"Row {index + 2}: {gene_list[index]}")
+    if gene_missing:
+        print("❌ Gene column is empty. Please provide values in this column to validate.")
+        return False, rows
+    
+    invalid_dict = {}
+    
+    # if gene isn't empty, first check if there are any empty values
+    for index, gene in enumerate(gene_list):
+        gene = gene.strip()
+        if gene in ['NA', '-', '']:
+            rows[index]['gene'] = 'ENTRY MISSING'
+            invalid_dict[index] = "Gene is empty, 'NA', or '-'"
 
     # now we want to check for gene names that are actually combo rules - if there are any, we want to check that any rule IDs mentioned here are present in the file already
     # if there is a value in gene list that follows the format of three capital letters followed by a string of four numbers, this is one to compare against rule ids
-    
-    print("\nNow checking for combinatorial rules in gene column...")
-
-    invalid_indices_dict = {}
-
-    pattern = re.compile(r'[A-Z]{3}\d{4}')
-    for index, gene in enumerate(gene_list):
-        if index not in invalid_indices:
-            matches = pattern.findall(gene)
-            for match in matches:
-                if match not in rule_list:
-                    invalid_indices_dict[index + 1] = match
-                    break
-    
-    if not invalid_indices_dict:
-        print("✅ All gene combinatorial rule IDs are valid")
-    
+    if rule_list:
+        # we will use a regex to find the ruleIDs in the gene list
+        pattern = re.compile(r'[A-Z]{3}\d{4}')
+        for index, gene in enumerate(gene_list):
+            if index not in invalid_dict.keys():
+                matches = pattern.findall(gene)
+                for match in matches:
+                    if match not in rule_list:
+                        invalid_dict[index] = f"ruleID {match} is not present in the list of rules"
+                        rows[index]['gene'] = 'CHECK VALUE: ' + gene
+                        break
     else:
-        print(f"❌ {len(invalid_indices_dict)} rows have failed the check")
-        for index, rule_id in invalid_indices_dict.items():
-            print(f"Row {index}: ruleID {rule_id} is not present in the list of rules")
+        print("\nNo rule IDs available, skipping combinatorial rule check in gene column.")
     
-    if not invalid_indices and not invalid_indices_dict:
-        return True
-    else:
-        return False
+    check_result = report_check_results(
+        check_name="gene",
+        invalid_dict=invalid_dict,
+        success_message="All gene values are valid",
+        failure_message="Gene column must contain a value that is not empty, NA or '-'. If the gene is a combinatorial rule, it must match an existing ruleID in the ruleID column.",
+    )
+
+    return check_result, rows
 
 
 def check_id_accessions(nodeID_list, protein_list, nucleotide_list, hmm_list, variation_type_list, refseq_file, node_file, hmm_file):

@@ -123,20 +123,25 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
         print("\nChecking txid and organism are valid together...")
         summary_checks["txid and organism"], rows = check_txid_organism(txid_list, organism_list, rows, ncbi_organism_dict)
   
-
     # Check gene
-    if "gene" in found_columns and "ruleID" in found_columns:
-        summary_checks["gene"] = check_gene(get_column("gene", rows), rule_ids)
-    elif "gene" in found_columns and not "ruleID" in found_columns:
-        print(f"\n❌ No ruleID column found in file. Spec {SPEC_VERSION} requires this column to be present, and cannot validate gene without it. Continuing to validate other columns...")
-        summary_checks["gene"] = False
-    else:
-        print(f"\n❌ No gene column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
-        summary_checks["gene"] = False
+    print("\nChecking gene column...")
+    # we need ruleIDs to validate gene, so if this is None we can't fully validate gene
+    summary_checks["gene"], rows = check_gene(get_column("gene", rows), rule_ids, rows)
     
     # Check gene accessions
-    accession_columns = ["nodeID", "protein accession", "nucleotide accession", "HMM accession"]
-    if all(col in found_columns for col in accession_columns):
+    # okay so for these columns, at least one of them must have a value
+    print("\nChecking nodeID, refseq accession, GenBank accession and HMM accession columns...")
+    
+    accession_columns = ["nodeID", "protein accession", "nucleotide accession", "HMM accession", "variation type"]
+    if not all(col in found_columns for col in accession_columns):
+        print(f"\n❌ Spec {SPEC_VERSION} requires at least one of nodeID, protein accession, nucleotide accession, HMM accession and variation type columns to be present. We cannot validate accessions unless all columns are present. The following columns were not found:")
+        for column in accession_columns:
+            if column not in found_columns:
+                print(f"❌ {column} column not found in file.")
+        summary_checks["gene accessions"] = False
+    
+    # if they're all present, we can now validate. Note we need the variation type column as if the value in here is 'Combination', then all the accession columns can be empty
+    else:
         refseq_file = rm.dir / "ReferenceGeneCatalog.txt"
         amrfp_nodes = rm.dir / "ReferenceGeneHierarchy.txt"
         hmm_file = rm.dir / "NCBIfam-AMRFinder.tsv"
@@ -145,29 +150,14 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
         print(f"\nChecking against AMRFinderPlus database version {rm.get_amrfp_db_version()}...")
         
         # Check accessions
-        if "variation type" in found_columns:
-            summary_checks["gene accessions"] = check_id_accessions(
-                get_column("nodeID", rows), 
-                get_column("protein accession", rows), 
-                get_column("nucleotide accession", rows), 
-                get_column("HMM accession", rows), 
-                get_column("variation type", rows), 
-                refseq_file, amrfp_nodes, hmm_file
-            )
-        else:
-            summary_checks["gene accessions"] = check_id_accessions(
-                get_column("nodeID", rows), 
-                get_column("protein accession", rows), 
-                get_column("nucleotide accession", rows), 
-                get_column("HMM accession", rows), 
-                None, refseq_file, amrfp_nodes, hmm_file
-            )
-    else:
-        for column in accession_columns:
-            if column not in found_columns:
-                print(f"\n❌ {column} column not found in file.")
-        print(f"\n❌ Spec {SPEC_VERSION} requires all of nodeID, protein accession, nucleotide accession, HMM accession and variation type columns to be present in order to validate. Continuing to validate other columns...")
-        summary_checks["gene accessions"] = False
+        summary_checks["gene accessions"], rows = check_id_accessions(
+            get_column("nodeID", rows), 
+            get_column("protein accession", rows), 
+            get_column("nucleotide accession", rows), 
+            get_column("HMM accession", rows), 
+            get_column("variation type", rows), 
+            refseq_file, amrfp_nodes, hmm_file
+        )
 
     # Check ARO accession
     if "ARO accession" in found_columns:

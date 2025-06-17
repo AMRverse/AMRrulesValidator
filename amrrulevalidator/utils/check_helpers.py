@@ -121,29 +121,3 @@ def check_if_col_empty(col_values, col_name, rows):
         return True, rows
     else:
         return False, rows 
-
-
-def check_if_allowed_value(value_list, col_name, allowable_values, missing_allowed=False):
-    """
-    Check if all values in a list are in the set of allowed values.
-    
-    Args:
-        value_list: List of values to check
-        col_name: Name of the column being checked
-        allowable_values: List of allowed values
-        missing_allowed: Whether missing values are allowed
-        
-    Returns:
-        bool: True if check passed, False otherwise
-    """   
-
-    print(f"\nChecking {col_name} column...")
-    
-    invalid_indices = check_values_in_list(value_list, allowable_values, col_name, missing_allowed)
-    
-    return report_check_results(
-        check_name=col_name,
-        invalid_indices=invalid_indices,
-        success_message=f"All {col_name} values are valid",
-        failure_message=f"{col_name} column must contain one of the following values:\n{', '.join(allowable_values)}"
-    )
