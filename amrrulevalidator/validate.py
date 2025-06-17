@@ -203,17 +203,12 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
 
     # Check PMID
     print("\nChecking PMID column...")
-    summary_checks["PMID"] = check_PMID(get_column("PMID", rows), rows)
-
+    summary_checks["PMID"], rows = check_PMID(get_column("PMID", rows), rows)
 
     # Check evidence code
-    if "evidence code" in found_columns:
-        summary_checks["evidence code"] = check_evidence_code(
-            get_column("evidence code", rows)
-        )
-    else:
-        print(f"\n❌ No evidence code column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
-        summary_checks["evidence code"] = False
+    print("\nChecking evidecnce code column...")
+    summary_checks["evidence code"] = check_evidence_code(get_column("evidence code", rows), rows)
+ 
 
     # Check evidence grade and limitations
     if "evidence grade" in found_columns and "evidence limitations" in found_columns:

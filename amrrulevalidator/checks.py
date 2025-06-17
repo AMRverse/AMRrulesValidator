@@ -4,7 +4,7 @@ import csv
 import re
 from pathlib import Path
 from amrrulevalidator.utils.check_helpers import report_check_results, validate_pattern, check_values_in_list, check_if_col_empty
-from amrrulevalidator.constants import PHENOTYPE, GENE_CONTEXT, CLINICAL_CAT, BREAKPOINT_CONDITIONS
+from amrrulevalidator.constants import PHENOTYPE, GENE_CONTEXT, CLINICAL_CAT, BREAKPOINT_CONDITIONS, EVIDENCE_CODES
 
 
 
@@ -709,44 +709,54 @@ def check_PMID(pmid_list, rows):
     return check_result, rows
 
 
-def check_evidence_code(evidence_code_list):
+def check_evidence_code(evidence_code_list, rows):
+
+    evidence_code_missing, rows = check_if_col_empty(evidence_code_list, 'evidence code', rows)
+
+    if evidence_code_missing:
+        print("❌ Evidence code column is empty. Please provide values in this column to validate.")
+        return False, rows
     
-    print("\nChecking evidence code column...")
-
-    allowable_values = ["ECO:0001091 knockout phenotypic evidence", "ECO:0000012 functional complementation evidence", "ECO:0001113 point mutation phenotypic evidence", "ECO:0000024 protein-binding evidence", "ECO:0001034 crystallography evidence", "ECO:0000005 enzymatic activity assay evidence", "ECO:0000042 gain-of-function mutant phenotypic evidence", "ECO:0007000 high throughput mutant phenotypic evidence", "ECO:0001103 natural variation mutant evidence", "ECO:0005027 genetic transformation evidence", "ECO:0000020 protein inhibition evidence", "ECO:0006404 experimentally evolved mutant phenotypic evidence", "ECO:0000054 double mutant phenotype evidence"]
-
+    # check we have an evidence code that belongs to one of the allowable values
+    # if it doesn't, check to see if the code starts with ECO:, and if it does, flag it so it can be checked
+    
+    
     # can be more than one of those values in this column, so need to split on the , separating them
-    invalid_indices = []
+    invalid_dict = {}
     invalid_codes = []
     
     for index, value in enumerate(evidence_code_list):
         value = value.strip()
         if value == '' or value in ['NA', '-']:
-            invalid_indices.append(index)
+            invalid_dict[index] = "Evidence code must contain a value that is not empty, NA or '-'."
+            rows[index]['evidence code'] = 'ENTRY MISSING'
+            continue
+        if ';' in value:
+            invalid_dict[index] = "Evidence codes should be separated by a comma, not a semi-colon."
+            rows[index]['evidence code'] = 'CHECK VALUE: ' + value
             continue
         codes = [code.strip() for code in value.split(',')]
         for code in codes:
-            if code not in allowable_values:
-                invalid_indices.append(index)
+            if not code.startswith("ECO:"):
+                invalid_dict[index] = f"Evidence code '{code}' does not start with 'ECO:', and so may not be valid."
+                rows[index]['evidence code'] = 'CHECK VALUE: ' + value
+                continue
+            if code not in EVIDENCE_CODES:
+                invalid_dict[index] = f"Evidence code '{code}' is not in the list of typical evidence codes."
+                rows[index]['evidence code'] = 'CHECK VALUE: ' + value
                 # only add the code to the list if it's got an eco code prefix
                 if code.startswith("ECO:"):
                     invalid_codes.append(code)
 
-    if not invalid_indices:
-        print("✅ All evidence codes are valid")
-        return True
-    # otherwise we want to check if the ECO code still starts with "ECO:" but is a code that we haven't got in our suggested list
-    # users can have other ECO codes but we want to flag these for potential inclusion in the allowable values
-    else:
-        if invalid_codes:
-            unique_codes = set(invalid_codes)
-            print("The following evidence codes are new and not currently in the list of suggested values:")
-            print(f"{', '.join(unique_codes)}")
-            print("If these are valid ECO codes, please ignore this message from the check.")
-        print(f"\n❌ {len(invalid_indices)} rows have failed the check. Each rule must have an evidence code and not be empty. If there are multiple evidence codes for a row, they must be separated by a ',', not by a new line. Evidence codes must start with 'ECO:'.")
-        for index in invalid_indices:
-            print(f"Row {index + 2}: {evidence_code_list[index]}")
-        return False
+    check_result = report_check_results(
+        check_name="evidence code",
+        invalid_dict=invalid_dict,
+        success_message="All evidence codes are valid",
+        failure_message="Evidence code column must contain a value that is not empty, NA or '-'. Multiple evidence codes should be separated by a comma, not a semi-colon. Evidence codes should start with 'ECO:'. If the code is not in the list of typical evidence codes, it should be checked manually. Below is a list of unique invalid codes that were found:\n",
+        unique_values=set(invalid_codes)
+    )
+
+    return check_result, rows
 
 
 def check_evidence_grade_limitations(evidence_grade_list, evidence_limitations_list):
