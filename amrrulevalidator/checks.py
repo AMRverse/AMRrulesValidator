@@ -421,62 +421,47 @@ def check_mutation_variation(mutation_list, variation_list, rows):
     return check_result, rows
 
     
-
-def check_context(context_list, variation_type_list):
+def check_context(context_list, variation_list, rows):
     # valid values are core or acquired
     # if variation_type_list isn't None, make sure we check that context is either
     #core or acquired if validation_type isn't 'Combination'
-    print("\nChecking gene context column...")
+    
+    context_missing, rows = check_if_col_empty(context_list, 'gene context', rows)
 
-    invalid_indices = {}
-    if variation_type_list is not None:
-        for index, (context, variation) in enumerate(zip(context_list, variation_type_list)):
+    if context_missing:
+        print("❌ Gene context column is empty. Please provide values in this column to validate.")
+        return False, rows
+    
+    # if context isn't completely empty, but variation type is, we need to check first if it's a valid value of core or acquired
+    if all(value.strip() == 'ENTRY MISSING' for value in variation_list):
+        invalid_dict, rows = check_values_in_list(context_list, ['core', 'acquired'], 'gene context', rows=rows, missing_allowed=False, fail_reason="must be either 'core' or 'acquired'")
+    # otherwise we need to do a more complex check
+    else:
+        invalid_dict = {}
+        for index, (context, variation) in enumerate(zip(context_list, variation_list)):
             context = context.strip()
             variation = variation.strip()
+            if context in ['NA', '']:
+                rows[index]['gene context'] = 'ENTRY MISSING'
+                invalid_dict[index] = "Gene context is empty, 'NA', or '-'."
+                continue
             if context not in ['core', 'acquired'] and variation != 'Combination':
                 reason = "Gene context must be 'core' or 'acquired' if variation type is not 'Combination'."
-                invalid_indices[index] = reason
+                invalid_dict[index] = reason
+                rows[index]['gene context'] = 'CHECK VALUE: ' + context
             if context != '-' and variation == 'Combination':
                 reason = 'If variation type is "Combination", gene context must be "-".'
-                invalid_indices[index] = reason
-    if not variation_type_list:
-        for index, context in enumerate(context_list):
-            context = context.strip()
-            if context not in ['core', 'acquired']:
-                reason = "Gene context must be 'core' or 'acquired'."
-                invalid_indices[index] = reason
-    
-    if not invalid_indices:
-        print("✅ All gene context values are valid")
-        return True
-    else:
-        print(f"❌ {len(invalid_indices)} rows have failed the check")
-        print("Gene context column must contain either 'core' or 'acquired' and cannot be empty. If variation type is 'Combination', context must be '-'.")
-        for index in invalid_indices:
-            print(f"Row {index + 2}: {context_list[index]}; {invalid_indices[index]}")
-        return False
+                invalid_dict[index] = reason
+                rows[index]['gene context'] = 'CHECK VALUE: ' + context
 
+    check_result = report_check_results(
+        check_name="gene context",
+        invalid_dict=invalid_dict,
+        success_message="All gene context values are valid",
+        failure_message="Gene context must be either 'core' or 'acquired', and cannot be empty or NA. If variation type is 'Combination', gene context must be '-'."
+    )
 
-def check_context_mutation(context_list, mutation_list):
-    # check that if context is core, and mutation is not '-', then provide a warning
-    invalid_indices = []
-    for index, (context, mutation) in enumerate(zip(context_list, mutation_list)):
-        context = context.strip()
-        mutation = mutation.strip()
-        if context == 'core' and mutation != '-':
-            invalid_indices.append(index)
-    if not invalid_indices:
-        print("✅ All context and mutation values are concordant")
-        return True
-    else:
-        print(f"⚠️ Warning: {len(invalid_indices)} rows may have incorrect values.")
-        print("If the gene context is a 'core' gene, the expected mutation should generally be '-' unless the rule " \
-        "refers to a specific variant of the core gene for which there is evidence of a nonwildtype mutation. "
-        "Note that a resistance-associated mutation in a core gene (e.g. Ser83Phe in GyrA) should be coded as context 'acquired', " \
-        "since the variant the rule applies to is not itself 'core'.")
-        for index in invalid_indices:
-            print(f"Row {index + 2}: {context_list[index]} and {mutation_list[index]}")
-        return False
+    return check_result, rows
 
 
 def extract_card_drug_names(resource_manager=None):

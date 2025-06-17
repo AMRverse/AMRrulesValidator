@@ -162,46 +162,22 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
         rows
     )
 
-    # Check gene context
-    if "gene context" in found_columns:
-        if "variation type" not in found_columns:
-            summary_checks["gene context"] = check_context(
-                get_column("gene context", rows), 
-                None
-            )
-        else:
-            summary_checks["gene context"] = check_context(
-                get_column("gene context", rows), 
-                get_column("variation type", rows)
-            )
-        
-        # Check context and mutation concordance
-        if "mutation" in found_columns:
-            summary_checks["context and mutation concordance"] = check_context_mutation(
-                get_column("mutation", rows), 
-                get_column("gene context", rows)
-            )
-    else:
-        print(f"\n❌ No gene context column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
-        summary_checks["gene context"] = False
+    print("\nChecking gene context column...")
+    summary_checks["gene context"], rows = check_context(
+        get_column("gene context", rows), 
+        get_column("variation type", rows), 
+        rows
+    )
+
+    print("\nChecking drug and drug class columns...")
+    summary_checks["drug and drug class"], rows = check_drug_drugclass(
+            get_column("drug", rows), 
+            get_column("drug class", rows),
+            rm)
 
     print("Writing output file...")
     # Write the processed rows to the output file
     write_tsv(rows, output_p, CANONICAL_COLUMNS)
-
-    # Check drug and drug class
-    if "drug" in found_columns and "drug class" in found_columns:
-        summary_checks["drug and drug class"] = check_drug_drugclass(
-            get_column("drug", rows), 
-            get_column("drug class", rows),
-            rm  # Pass ResourceManager to check_drug_drugclass
-        )
-    else:
-        for column in ["drug", "drug class"]:
-            if column not in found_columns:
-                print(f"\n❌ {column} column not found in file.")
-        print(f"\n❌ Spec {SPEC_VERSION} requires at least both drug and drug class columns to be present in order to validate. Continuing to validate other columns...")
-        summary_checks["drug and drug class"] = False
 
     # Check phenotype
     if "phenotype" in found_columns:

@@ -84,6 +84,7 @@ def check_values_in_list(value_list, allowed_values, col_name, rows, missing_all
         
     Returns:
         dict: Dictionary of invalid indices with reasons
+        rows: List of rows with invalid values flagged
     """
     invalid_dict = {}
 
