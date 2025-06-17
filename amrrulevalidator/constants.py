@@ -9,3 +9,5 @@ CANONICAL_COLUMNS = ["ruleID", "txid", "organism", "gene", "nodeID", "protein ac
 PHENOTYPE = ['wildtype', 'nonwildtype']
 
 GENE_CONTEXT = ['core', 'acquired']
+
+CLINICAL_CAT = ["S", "I", "R"]

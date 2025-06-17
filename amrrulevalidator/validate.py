@@ -182,20 +182,13 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
         get_column("phenotype", rows),
         rows)
 
+    # Check clinical category
+    print("\nChecking clinical category column...")
+    summary_checks["clinical category"], rows = check_clinical(get_column("clinical category", rows), rows)
+
     print("Writing output file...")
     # Write the processed rows to the output file
     write_tsv(rows, output_p, CANONICAL_COLUMNS)
-
-    # Check clinical category
-    if "clinical category" in found_columns:
-        summary_checks["clinical category"] = check_if_allowed_value(
-            get_column("clinical category", rows), 
-            "clinical category", 
-            ["S", "I", "R"]
-        )
-    else:
-        print(f"\n❌ No clinical category column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
-        summary_checks["clinical category"] = False
 
     # Check breakpoint
     if "breakpoint" in found_columns:

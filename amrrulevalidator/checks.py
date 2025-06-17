@@ -4,7 +4,7 @@ import csv
 import re
 from pathlib import Path
 from amrrulevalidator.utils.check_helpers import report_check_results, validate_pattern, check_values_in_list, check_if_col_empty
-from amrrulevalidator.constants import PHENOTYPE, GENE_CONTEXT
+from amrrulevalidator.constants import PHENOTYPE, GENE_CONTEXT, CLINICAL_CAT
 
 
 
@@ -540,6 +540,34 @@ def check_phenotype(phenotype_list, rows):
 
     return check_result, rows
 
+
+def check_clinical(clinical_cat_list, rows):
+    
+    print("\nChecking clinical category column...")
+
+    # Check if clinical category column is empty
+    clinical_cat_missing, rows = check_if_col_empty(clinical_cat_list, 'clinical category', rows)
+    if clinical_cat_missing:
+        print("❌ Clinical category column is empty. Please provide values in this column to validate.")
+        return False, rows
+
+    invalid_dict, rows = check_values_in_list(
+        value_list=clinical_cat_list,
+        allowed_values=CLINICAL_CAT,
+        col_name='clinical category',
+        rows=rows,
+        missing_allowed=False,
+        fail_reason="must be one of the following: S, I, or R."
+    )
+    
+    check_result = report_check_results(
+        check_name="clinical category",
+        invalid_dict=invalid_dict,
+        success_message="All clinical category values are valid",
+        failure_message="Clinical category must be one of the following: S, I, or R."
+    )
+
+    return check_result, rows
 
 def check_sir_breakpoint(clinical_category_list, breakpoint_list):
     """
