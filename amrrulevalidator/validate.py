@@ -68,45 +68,61 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
     Returns:
         bool: True if validation was successful, False otherwise
     """
-    # Read rows from input file
-    rows = read_tsv(input_p)
-    
-    # Ensure every row has every canonical column (fill with empty string)
-    for row in rows:
-        for col in CANONICAL_COLUMNS:
-            if col not in row:
-                row[col] = ""
-    
+
     # set up dict to capture which checks pass or fail
     summary_checks = {}
     
     print(f"\nValidating rules file: {input_p}")
 
-    # Print column headers
+    # Read rows from input file
+    rows = read_tsv(input_p)
+    
+    # Ensure every row has the required column (fill with empty string if absent)
     print(f"\nChecking that all required columns for spec {SPEC_VERSION} are present...")
     found_columns = list(rows[0].keys()) if rows else []
     for column in CANONICAL_COLUMNS:
         if column not in found_columns:
             print(f"❌ {column} column not found in file.")
-    print("\nContinuing to validate values in found columns...")
+            print(f"Adding {column} column and filling with empty values, to enable validation to continue.")
+    for row in rows:
+        for col in CANONICAL_COLUMNS:
+            if col not in row:
+                row[col] = ""
 
     # Check ruleID
-    if "ruleID" in found_columns:
-        rule_ids = get_column("ruleID", rows)
-        summary_checks["ruleID"] = check_ruleIDs(rule_ids)
-    else:
-        print(f"\n❌ No ruleID column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
-        rule_ids = None
-        summary_checks["ruleID"] = False
+    print("\nChecking ruleID column...")
+    rule_ids = get_column("ruleID", rows)
+    rule_ids, summary_checks["ruleID"], rows = check_ruleIDs(rule_ids, rows)
+
+    print("Writing output file...")
+    # Write the processed rows to the output file
+    write_tsv(rows, output_p, CANONICAL_COLUMNS)
 
     # Check txid and organism
-    if "txid" in found_columns and "organism" in found_columns:
-        txid_list = get_column("txid", rows)
-        organism_list = get_column("organism", rows)
-        summary_checks["txid and organism"] = check_organism(txid_list, organism_list, rm)
-    else:
-        print(f"\n❌ No organism or txid column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
-        summary_checks["txid and organism"] = False
+    print("\nChecking txid column...")
+    # parse the taxonomy file to get valid txids and organisms
+    taxonomy_file_path = rm.dir / "ncbi_taxonomy.tsv"
+    if not taxonomy_file_path.exists():
+        print("❌ Cannot find NCBI taxonomy file. Run 'amrrule update-resources' to download it.")
+        ncbi_organism_dict = None
+
+    # Read the taxonomy file and store all the organisms and their txids in a dictionary
+    with open(taxonomy_file_path, 'r') as f:
+        reader = csv.DictReader(f, delimiter='\t')
+        ncbi_organism_dict = {row['Accession']: row['Name'] for row in reader}
+    
+    txid_list = get_column("txid", rows)
+    txid_not_empty, summary_checks["txid"], rows = check_txid(txid_list, rows, ncbi_organism_dict)
+    
+    print("\nChecking organism column...")
+    organism_list = get_column("organism", rows)
+    org_not_empty, summary_checks["organism"], rows = check_organism(organism_list, rows, ncbi_organism_dict)
+    
+    #Only check txid and organism together if both columns are not empty
+    if txid_not_empty and org_not_empty and ncbi_organism_dict:
+        print("\nChecking txid and organism are valid together...")
+        summary_checks["txid and organism"], rows = check_txid_organism(txid_list, organism_list, rows, ncbi_organism_dict)
+  
 
     # Check gene
     if "gene" in found_columns and "ruleID" in found_columns:

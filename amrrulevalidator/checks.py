@@ -3,33 +3,11 @@
 import csv
 import re
 from pathlib import Path
+from amrrulevalidator.utils.check_helpers import report_check_results, validate_pattern, check_values_in_list, check_if_col_empty
 
-
-def check_if_allowed_value(value_list, col_name, allowable_values, missing_allowed=False):
-
-    print("\nChecking  " + col_name + " column...")
-
-    if missing_allowed:
-        # can be empty, but this must be reflected by a '-', otherwise must be an allowed value (which should include '-')
-        invalid_indices = [index for index, value in enumerate(value_list) if value.strip() == '' or value.strip() in ['NA'] or value.strip() not in allowable_values]
-    else:
-        # disallow '-' as it must be one of the approved values
-        invalid_indices = [index for index, value in enumerate(value_list) if value.strip() == '' or value.strip() in ['NA', '-'] or value.strip() not in allowable_values]
-
-    if not invalid_indices:
-        print("✅ All " + col_name + " values are valid")
-        return True
-    else:
-        print(f"❌ {len(invalid_indices)} rows have failed the check")
-        print(col_name + " column must contain one of the following values:\n" + ", ".join(allowable_values))
-        for index in invalid_indices:
-            print(f"Row {index + 2}: {value_list[index]}")
-        return False
 
 
 def check_if_not_missing(value_list, col_name, list_unique=False):
-
-    print("\nChecking  " + col_name + " column...")
 
     invalid_indices = [index for index, value in enumerate(value_list) if value.strip() == '' or value.strip() in ['NA', '-']]
 
@@ -50,86 +28,163 @@ def check_if_not_missing(value_list, col_name, list_unique=False):
         return False
 
 
-def check_ruleIDs(id_list):
-    
-    print("\nChecking ruleID column...")
-    
-    invalid_indices = []
-    
-    if len(id_list) != len(set(id_list)):
-        print(f"❌ Rule IDs are not unique")
-        invalid_indices = [index for index, value in enumerate(id_list) if id_list.count(value) > 1]
-    else:
-        print("All rule IDs have passed auto validation")
+def check_ruleIDs(id_list, rows):
+    """
+    Checks that rule IDs are unique and have the same prefix.
+    Args:
+        id_list: List of rule IDs to check.
+        rows: list of row dictionaries to flag missing values in.
+    Returns:
+        tuple: A tuple containing:
+            - A set of unique rule IDs.
+            - A boolean indicating if the check passed.
+            - The modified rows with any invalid rule IDs flagged.
+    """
 
-    prefix = id_list[0][:3]
-    prefix_options = [prefix]
-    for rule_id in id_list:
-        if rule_id[:3] != prefix:
-            invalid_indices.append(id_list.index(rule_id))
-            # add the different prefix to the list
-            prefix_options.append(rule_id[:3])
+    invalid_dict = {}
+    prefix_options = []
+    valid_rule_ids = []
+
+    # if all values are empty, fail the check
+    ruleID_missing, rows = check_if_col_empty(id_list, 'ruleID', rows=rows)
+    if ruleID_missing:
+        return None, False, rows
+
+    # Check for consistent prefix
+    prefix_options = []
+    for index, rule_id in enumerate(id_list):
+        if rule_id.strip() == '' or rule_id.strip() in ['NA', '-']:
+            # If the rule ID is empty, NA, or '-', flag it as missing
+            rows[index]['ruleID'] = 'ENTRY MISSING'
+            invalid_dict[index] = "Rule ID is empty, 'NA', or '-'"
+            continue
+        # otherwise, we have something in this cell, so first let's check that it starts with three capital letters
+        # add a flag to this cell if that's the case
+        if not re.match(r'^[A-Z]{3}', rule_id.strip()):
+            invalid_dict[index] = f"Rule ID '{rule_id}' does not start with an expected prefix (should be three capital letters matching the organism)."
+            rows[index]['ruleID'] = 'CHECK VALUE: ' + rule_id
+            continue
+        # if it does, we can check the prefix
+        rule_prefix = rule_id.strip()[:3]  # Get the first three characters as prefix
+        # if prefix_options is empty, we can set it as the expected prefix
+        if not prefix_options:
+            prefix_options.append(rule_prefix)
+            expected_prefix = rule_prefix
+        else:
+           # otherwise, we should check that the prefix is consistent with the previous one
+           if rule_prefix != expected_prefix:
+               invalid_dict[index] = f"Inconsistent prefix: {rule_prefix} (expected {expected_prefix})"
+               rows[index]['ruleID'] = 'CHECK VALUE: ' + rule_id
+               # add the different prefix to the list
+               prefix_options.append(rule_prefix)
+               continue
+        # if we get here, the ruleID is valid, so we can add it to our set of ruleIDs that we will output later
+        # make a note though if the ruleID is a duplicate that we've already seen
+        if rule_id.strip() in valid_rule_ids:
+            invalid_dict[index] = f"Duplicate rule ID: {rule_id.strip()}"
+            rows[index]['ruleID'] = 'CHECK VALUE: ' + rule_id
+        else:
+            # if it's not a duplicate, we can add it to the valid rule IDs
+            valid_rule_ids.append(rule_id.strip())
     
-    if not invalid_indices and len(prefix_options) == 1:
-        print("✅ All values are valid")
-        print(f"Rule prefix: {prefix}")
-    else:
-        print(f"{len(invalid_indices)} rows have failed the check. Rule IDs must be unique and have the same prefix.")
-        for index in invalid_indices:
-            print(f"Row {index + 2}: {id_list[index]}")
-        print(f"Multiple rule ID prefixes: " + ", ".join(prefix_options))
+    # Generate success/failure message
+    success_message = f"All ruleIDs are valid (prefix: {expected_prefix})"
+    failure_message = "Rule IDs must be unique and have the same prefix."
     
-    if not invalid_indices:
-        return True
-    else:
-        return False
+    # Report results
+    check_result = report_check_results(
+        check_name="ruleID",
+        invalid_dict=invalid_dict,
+        success_message=success_message,
+        failure_message=failure_message
+    )
+
+    if len(prefix_options) > 1:
+        print(f"\nMultiple rule ID prefixes found: {', '.join(prefix_options)}")
+
+    return valid_rule_ids, check_result, rows
 
 
-def check_organism(txid_list, organism_list, resource_manager=None):
-    
-    print("\nChecking txid and organism columns...")
+def check_txid(txid_list, rows, ncbi_organism_dict):
+    """ Check that the taxonomic IDs are valid."""
 
-    # read in the valid NCBI organism names and their corresponding txids
-    if resource_manager:
-        # Use the ResourceManager to access the file
-        taxonomy_file_path = resource_manager.dir / "ncbi_taxonomy.tsv"
-        if not taxonomy_file_path.exists():
-            print("❌ Cannot find NCBI taxonomy file. Run 'amrrule update-resources' to download it.")
-            return False
-    
-    # Read the taxonomy file
-    with open(taxonomy_file_path, 'r') as f:
-        reader = csv.DictReader(f, delimiter='\t')
-        ncbi_organism_dict = {row['Accession']: row['Name'] for row in reader}
-    
-    # Initialize a dictionary to store invalid rows and reasons
-    invalid_txid_indices = {}
-    invalid_org_indices = {}
-    invalid_org_names = []
-    invalid_txids = []
+    txid_missing, rows = check_if_col_empty(txid_list, 'txid', rows=rows)
 
+    if txid_missing:
+        print("❌ txid column is empty. Please provide values in the column to validate.")
+        return False, False, rows
+
+    if not ncbi_organism_dict:
+        print("❌ NCBI organism dictionary is not provided. Cannot validate txids without it.")
+        return True, False, rows
+    
     # for each txid, check that its a value (so not empty, NA, or '-'), and that it's in the ncbi_organism_dict keys
-    for index, txid in enumerate(txid_list):
-        txid = txid.strip()
-        if txid in ['NA', '-', '']:
-            invalid_txid_indices[index] = "txid is empty, 'NA', or '-'"
-        elif txid not in ncbi_organism_dict.keys():
-            invalid_txid_indices[index] = "Taxonomic ID " + txid + " is not in the NCBI taxonomy list"
-            invalid_txids.append(txid)
+    invalid_dict, rows = check_values_in_list(
+        value_list=txid_list,
+        col_name='txid',
+        allowed_values=set(ncbi_organism_dict.keys()),
+        missing_allowed=False,
+        rows=rows,
+        fail_reason = "is not a valid NCBI taxonomic ID"
+    )
+
+    check_result = report_check_results(
+        check_name="txid",
+        invalid_dict=invalid_dict,
+        success_message="All txids are valid",
+        failure_message="Txids must be present, not 'NA' or '-'. Txids should be in the NCBI taxonomy list, as per file resources/ncbi_taxonomy.tsv."
+    )
+
+    return True, check_result, rows
+
+def check_organism(organism_list, rows, ncbi_organism_dict):
+
+    org_missing, rows = check_if_col_empty(organism_list, 'organism', rows=rows)
+
+    if org_missing:
+        print("❌ Organism column is empty. Please provide values in the column to validate.")
+        return False, False, rows
     
+    if not ncbi_organism_dict:
+        print("❌ NCBI organism dictionary is not provided. Cannot validate organism names without it.")
+        return True, False, rows
+    
+    invalid_dict = {}
+
+    # Check if the organism names are valid
     for index, organism in enumerate(organism_list):
+        # first check that the organism name is not empty, NA, or '-'
         organism = organism.strip()
-        # check that the organism name is not empty, NA, or '-'
         if organism in ['NA', '-', '']:
-            invalid_org_indices[index] = "Organism name is empty, 'NA', or '-'"
-        # check that the organism name starts with 's__' and is in the NCBI organism names list
-        elif not organism.startswith('s__'):
-            invalid_org_indices[index] = "Organism name " + organism + " does not start with 's__'"
-            invalid_org_names.append(organism)
-        elif organism.replace('s__', '', 1) not in ncbi_organism_dict.values():
-            invalid_org_indices[index] = "Organism name " + organism + " is not in the NCBI taxonomy list"
-            invalid_org_names.append(organism)
-    
+            rows[index]['organism'] = 'ENTRY MISSING'
+            organism_list[index] = 'ENTRY MISSING'
+            continue
+        # now check that the organism name starts with 's__'
+        if not organism.startswith('s__'):
+            rows[index]['organism'] = 'CHECK VALUE: ' + organism
+            invalid_dict = {index: f"Organism name {organism} does not start with 's__'"}
+            continue
+        # if all those pass, now check if it's in the NCBI organism dictionary
+        organism_name = organism.replace('s__', '', 1)  # Remove 's__' prefix for comparison
+        if organism_name not in ncbi_organism_dict.values():
+            rows[index]['organism'] = 'CHECK VALUE: ' + organism
+            invalid_dict = {index: f"Organism name {organism} is not in the NCBI taxonomy list"}
+            continue
+
+    check_result = report_check_results(
+        check_name="organism",
+        invalid_dict=invalid_dict,
+        success_message="All organisms are valid",
+        failure_message="Organisms must be present, not 'NA' or '-'. Organisms should be in the NCBI taxonomy list, as per file resources/ncbi_taxonomy.tsv. Organisms should start with the prefix 's__'.",
+        unique_values = set(organism_list)
+    )
+
+    return True, check_result, rows
+
+def check_txid_organism(txid_list, organism_list, rows, ncbi_organism_dict):
+  
+    # this check will only occur if both columns are present
+    invalid_dict = {}
     # for all valid taxids, check that the associated organism name matches the one in the list
     for index, txid in enumerate(txid_list):
         txid = txid.strip()
@@ -137,37 +192,22 @@ def check_organism(txid_list, organism_list, resource_manager=None):
             expected_organism = ncbi_organism_dict[txid]
             # we need to split the 's__' prefix from the organism name before checking
             current_organism = organism_list[index].strip().replace('s__', '', 1)
-            if index not in invalid_org_indices and current_organism != expected_organism:
-                invalid_org_indices[index] = f"Organism name {current_organism} does not match expected name {expected_organism} for taxid {txid}"
-                invalid_org_names.append(current_organism)
-    
-    if not invalid_txid_indices and not invalid_org_indices:
-        print("✅ All txid and organism names passed validation")
-    else:
-        print(f"❌ {len(invalid_txid_indices) + len(invalid_org_indices)} rows have failed the check")
-        print("txids and organism names must be present, not 'NA' or '-'. Organism names should start with 's__'. Both txids and organism names should be in the NCBI taxonomic list, as per file card_ontology/ncbi_taxonomy.tsv.")
-        for index in invalid_txid_indices:
-            print(f"Row {index + 2}: {txid_list[index]}")
-        for index in invalid_org_indices:
-            print(f"Row {index + 2}: {organism_list[index]}")
-    
-    unique_organisms = set(organism_list)
-    # if we have some invalid organism names that aren't because the value is empty, and instead
-    # becase the value isn't in the GTDB list, go through the GTDB list and extract anything
-    # where the genus is the same, and provide those as options for the user to consider
-    if len(invalid_org_names) > 0:
-        print("\nThe following organism names are not in the NCBI list:\n")
-        unique_invalid_org_names = set(invalid_org_names)
-        for org_name in unique_invalid_org_names:
-            print(org_name)
+            if current_organism != expected_organism:
+                invalid_dict[index] = f"Organism name {current_organism} does not match expected name {expected_organism} for taxid {txid}"
+                rows[index]['organism'] = f'CHECK VALUE: {organism_list[index]}'
+                rows[index]['txid'] = f'CHECK VALUE: {organism_list[index]}'
+  
+    success_message = "All txid-organism pairs are valid"
+    failure_message = "Txid-organism pairs must match the what is in resources/ncbi_taxonomy.tsv."
 
-    unique_organisms_str = ', '.join(map(str, unique_organisms))
-    print(f"\nUnique organism names: {unique_organisms_str}")
-
-    if not invalid_txid_indices and not invalid_org_indices:
-        return True
-    else:
-        return False
+    check_result = report_check_results(
+        check_name="txid-organism",
+        invalid_dict=invalid_dict,
+        success_message=success_message,
+        failure_message=failure_message
+    )
+    
+    return check_result, rows
 
 
 def check_gene(gene_list, rule_list):
@@ -563,6 +603,16 @@ def check_phenotype_context(phenotype_list, context_list):
 
 
 def check_sir_breakpoint(clinical_category_list, breakpoint_list):
+    """
+    Check that clinical category (S/I/R) and breakpoint values are compatible.
+    
+    Args:
+        clinical_category_list: List of clinical category values (S, I, R)
+        breakpoint_list: List of breakpoint values
+        
+    Returns:
+        bool: True if check passed, False otherwise
+    """
     
     print("\nChecking clinical category and breakpoint columns...")
 
@@ -572,64 +622,59 @@ def check_sir_breakpoint(clinical_category_list, breakpoint_list):
         reason = None
         category = category.strip()
         breakpoint = breakpoint.strip()
+        
         if category == 'S' and not any(breakpoint.startswith(prefix) for prefix in ['MIC <', 'MIC <=', 'disk >', 'not applicable']):
             reason = "If clinical category is 'S', breakpoint should contain a value of 'MIC <', 'MIC <=', or 'disk >'. 'not applicable' is an allowed value if no breakpoint is available due to expected resistances."
         if category == 'R' and not any(breakpoint.startswith(prefix) for prefix in ['MIC >', 'MIC >=', 'disk <', 'not applicable']):
             reason = "If clinical category is 'R', breakpoint should contain a value of 'MIC >', 'MIC >=', or 'disk <'. 'not applicable' is an allowed value if no breakpoint is available due to expected resistances."
+            
         if reason:
             invalid_indices_dict[index + 2] = reason
 
-    if not invalid_indices_dict:
-        print("✅ All clinical category and breakpoint values are concordant")
-        return True
-    else:
-        print(f"❌ {len(invalid_indices_dict)} rows have failed the check")
-        for index, reason in invalid_indices_dict.items():
-            print(f"Row {index}: {reason}")
-        return False
+    return report_check_results(
+        check_name="clinical category and breakpoint",
+        invalid_dict=invalid_indices_dict,
+        success_message="All clinical category and breakpoint values are concordant",
+        failure_message="Clinical category and breakpoint values must be compatible."
+    )
 
 
 def check_bp_standard(breakpoint_standard_list):
+    """
+    Check that breakpoint standard values match expected patterns.
+    
+    Args:
+        breakpoint_standard_list: List of breakpoint standard values to check
+        
+    Returns:
+        bool: True if check passed, False otherwise
+    """
     
     print("\nChecking breakpoint standard column...")
-
-    # allowable values are ECOFF (Month Year), Name version (year), EUCAST Expected resistant phenotypes [version] ([date]), EUCAST [organism] Expert Rules [version (year])]
-    # eg EUCAST v14.0 (2024), ECOFF (May 2025), EUCAST Expected Resistant Phenotypes v1.2 (2023)
-    # we need regex to check these
-
+    
+    # Allowable patterns for breakpoint standards
     suggested_values = [
         r'^ECOFF \(\w+ \d{4}\)$',  # ECOFF (Month Year)
         r'^EUCAST .+ Expert Rules \(\w+ \d{4}\)$',  # EUCAST [organism] Expert Rules (Month year)
         r'^EUCAST Expected Resistant Phenotypes v\d+(\.\d+)? \(\d{4}\)$',  # EUCAST Expected Resistant Phenotypes version (year)
         r'^(EUCAST|CLSI)\s+v\d+(\.\d+)?\s+\(\d{4}\)$'  # EUCAST/CLSI version (year)
     ]
-    invalid_indices_dict = {}
+    
+    invalid_dict = validate_pattern(breakpoint_standard_list, suggested_values)
     unique_values = set(breakpoint_standard_list)
-    for index, value in enumerate(breakpoint_standard_list):
-        value = value.strip()
-        if value == '' or value in ['NA', '-']:
-            continue
-        if not any(re.match(pattern, value) for pattern in suggested_values):
-            invalid_indices_dict[index + 2] = value
-    if not invalid_indices_dict:
-        print("✅ All breakpoint standard values match expected patterns.")
-        print("Here is a list of the unique values found in the column:")
-        unique_values_str = '\n'.join(unique_values)
-        print(unique_values_str)
-        return True
-    else:
-        print(f"❌ {len(invalid_indices_dict)} rows have failed the check")
-        print("We check for the following formats: ECOFF (Month Year), EUCAST [organism] Expert Rules (Month year), EUCAST Expected Resistant Phenotypes vX (year), or EUCAST/CLSI vX (year).")
-        print("Breakpoint standard values that didn't match this format are:")
-        for index, value in invalid_indices_dict.items():
-            print(f"Row {index}: {value}")
-        print("Please double check these entries to ensure they are valid.")
-
-        print("Here is a list of the unique values found in the column:")
-        unique_values_str = '\n'.join(unique_values)
-        print(unique_values_str)
-
-        return False
+    
+    failure_message = ("We check for the following formats: ECOFF (Month Year), "
+                      "EUCAST [organism] Expert Rules (Month year), "
+                      "EUCAST Expected Resistant Phenotypes vX (year), "
+                      "or EUCAST/CLSI vX (year).")
+    
+    return report_check_results(
+        check_name="breakpoint standard",
+        invalid_dict=invalid_dict,
+        success_message="All breakpoint standard values match expected patterns.",
+        failure_message=failure_message,
+        unique_values=unique_values
+    )
 
 
 def check_evidence_code(evidence_code_list):
