@@ -4,6 +4,7 @@ import csv
 import re
 from pathlib import Path
 from amrrulevalidator.utils.check_helpers import report_check_results, validate_pattern, check_values_in_list, check_if_col_empty
+from amrrulevalidator.constants import PHENOTYPE, GENE_CONTEXT
 
 
 
@@ -434,7 +435,7 @@ def check_context(context_list, variation_list, rows):
     
     # if context isn't completely empty, but variation type is, we need to check first if it's a valid value of core or acquired
     if all(value.strip() == 'ENTRY MISSING' for value in variation_list):
-        invalid_dict, rows = check_values_in_list(context_list, ['core', 'acquired'], 'gene context', rows=rows, missing_allowed=False, fail_reason="must be either 'core' or 'acquired'")
+        invalid_dict, rows = check_values_in_list(context_list, GENE_CONTEXT, 'gene context', rows=rows, missing_allowed=False, fail_reason="must be either 'core' or 'acquired'")
     # otherwise we need to do a more complex check
     else:
         invalid_dict = {}
@@ -445,7 +446,7 @@ def check_context(context_list, variation_list, rows):
                 rows[index]['gene context'] = 'ENTRY MISSING'
                 invalid_dict[index] = "Gene context is empty, 'NA', or '-'."
                 continue
-            if context not in ['core', 'acquired'] and variation != 'Combination':
+            if context not in GENE_CONTEXT and variation != 'Combination':
                 reason = "Gene context must be 'core' or 'acquired' if variation type is not 'Combination'."
                 invalid_dict[index] = reason
                 rows[index]['gene context'] = 'CHECK VALUE: ' + context
@@ -462,36 +463,6 @@ def check_context(context_list, variation_list, rows):
     )
 
     return check_result, rows
-
-
-def extract_card_drug_names(resource_manager=None):
-    # read in the file that lists all the drugs and drug classes that are in the current version of the CARD ontology
-    drug_names_card = []
-    drug_classes_card = []
-    
-    if resource_manager:
-        # Use the ResourceManager to access the file
-        drug_names_file_path = resource_manager.dir / "card_drug_names.tsv"
-        if not drug_names_file_path.exists():
-            print("❌ Cannot find CARD drug names file. Run 'amrrule update-resources' to download it.")
-            return [], []
-    else:
-        # Fallback to direct file access if no ResourceManager provided
-        drug_names_file_path = Path('amrrulevalidator/resources/card_drug_names.tsv')
-        if not drug_names_file_path.exists():
-            drug_names_file_path = Path('card_drug_names.tsv')
-            if not drug_names_file_path.exists():
-                print("❌ Cannot find CARD drug names file. Run 'amrrule update-resources' to download it.")
-                return [], []
-    
-    with open(drug_names_file_path, newline='') as card_drugs_file:
-        reader = csv.DictReader(card_drugs_file, delimiter='\t')
-        for row in reader:
-            if row['Drug Name'] not in drug_names_card:
-                drug_names_card.append(row['Drug Name'])
-            if row['Drug Class'] not in drug_classes_card:
-                drug_classes_card.append(row['Drug Class'])
-    return drug_names_card, drug_classes_card
 
 
 def check_drug_drugclass(drug_list, drug_class_list, rows, rm=None):
@@ -555,7 +526,7 @@ def check_phenotype(phenotype_list, rows):
     # check that phenotype is one of the allowable values, wildtype or non wildtype
     invalid_dict, rows = check_values_in_list(
         value_list=phenotype_list,
-        allowed_values=['wildtype', 'nonwildtype'],
+        allowed_values=PHENOTYPE,
         col_name='phenotype',
         rows=rows
     )
