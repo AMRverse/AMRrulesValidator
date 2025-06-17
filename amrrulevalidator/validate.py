@@ -173,11 +173,8 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
     summary_checks["drug and drug class"], rows = check_drug_drugclass(
             get_column("drug", rows), 
             get_column("drug class", rows),
+            rows,
             rm)
-
-    print("Writing output file...")
-    # Write the processed rows to the output file
-    write_tsv(rows, output_p, CANONICAL_COLUMNS)
 
     # Check phenotype
     if "phenotype" in found_columns:
@@ -197,6 +194,10 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
         print(f"\n❌ No phenotype column found in file. Spec {SPEC_VERSION} requires this column to be present. Continuing to validate other columns...")
         summary_checks["phenotype"] = False
 
+    print("Writing output file...")
+    # Write the processed rows to the output file
+    write_tsv(rows, output_p, CANONICAL_COLUMNS)
+    
     # Check clinical category
     if "clinical category" in found_columns:
         summary_checks["clinical category"] = check_if_allowed_value(

@@ -494,38 +494,54 @@ def extract_card_drug_names(resource_manager=None):
     return drug_names_card, drug_classes_card
 
 
-def check_drug_drugclass(drug_list, drug_class_list, resource_manager=None):
-   
-    print("\nChecking drug and drug class columns...")
+def check_drug_drugclass(drug_list, drug_class_list, rows, rm=None):
+    drug_missing, rows = check_if_col_empty(drug_list, 'drug name', rows)
+    drug_class_missing, rows = check_if_col_empty(drug_class_list, 'drug class', rows)
 
-    # read in the file that lists all the drugs and drug classes that are in the current version of the CARD ontology
-    card_drugs, card_drug_classes = extract_card_drug_names(resource_manager)
-    
-    # want to check that there is at least one value in either drug or drug class
-    # need to check that if the value isn't '-', its a valid drug or drug class name as per card_drugs and card_drug_classes
-    invalid_indices_dict = {}
-    for index, (drug, drug_class) in enumerate(zip(drug_list, drug_class_list)):
-        drug = drug.strip()
-        drug_class = drug_class.strip()
-        if (drug == '' or drug == '-') and (drug_class == '' or drug_class == '-'):
-            invalid_indices_dict[index] = "Both drug and drug class are empty. At least one of these columns must contain a valid CARD drug or drug class name."
-            continue
-        if drug != '-' and drug not in card_drugs:
-            reason = 'Drug name ' + drug + ' is not a valid CARD drug name.'
-            invalid_indices_dict[index] = reason
-        if drug_class != '-' and drug_class not in card_drug_classes:
-            reason = 'Drug class ' + drug_class + ' is not a valid CARD drug class name.'
-            invalid_indices_dict[index] = reason
-    
-    if not invalid_indices_dict:
-        print("✅ All drug and drug class values are valid and listed in the CARD drug name ontology.")
-        return True
-    else:
-        print(f"❌ {len(invalid_indices_dict)} rows have failed the check")
-        print("One of drug or drug class must contain a value that is not empty, NA or '-'. Values must be listed in the CARD drug name ontology, as per card_drug_names.tsv. Drugs and their classes should be given in all lower case.")
-        for index, reason in invalid_indices_dict.items():
-            print(f"Row {index + 2}: {reason}")
-        return False
+    invalid_dict_combo = {}
+    missing_values = ['NA', '-', '', 'ENTRY MISSING']
+
+    if not drug_missing and not drug_class_missing:
+        # check in combination
+        for index, (drug, drug_class) in enumerate(zip(drug_list, drug_class_list)):
+            drug = drug.strip()
+            drug_class = drug_class.strip()
+            if drug in missing_values and drug_class in missing_values:
+                invalid_dict_combo[index] = "Both drug and drug class are empty, 'NA', or '-'. At least one of these columns must contain a valid CARD drug or drug class name."
+                rows[index]['drug'] = 'ENTRY MISSING'
+                rows[index]['drug class'] = 'ENTRY MISSING'
+                continue
+
+    # now check each column individually, against the allowed values
+    invalid_dict_drug = {}
+    invalid_dict_drug_class = {}
+    if not drug_missing:
+        invalid_dict_drug, rows = check_values_in_list(
+            value_list=drug_list,
+            allowed_values=rm.drug_names(),
+            col_name='drug name',
+            rows=rows,
+            missing_allowed=True,
+            fail_reason="is not a valid CARD drug name"
+        )
+    if not drug_class_missing:
+        invalid_dict_drug_class, rows = check_values_in_list(
+            value_list=drug_class_list,
+            allowed_values=rm.drug_classes(),
+            col_name='drug class',
+            rows=rows,
+            missing_allowed=True,
+            fail_reason="is not a valid CARD drug class name"
+        )
+
+    check_result = report_check_results(
+        check_name="drug and drug class",
+        invalid_dict={**invalid_dict_drug, **invalid_dict_drug_class, **invalid_dict_combo},
+        success_message="All drug and drug class values are valid",
+        failure_message="Drug and drug class columns must contain a value that is not empty, NA or '-'. Drug names and classes should be in the CARD ontology list, as per file resources/card_drug_names.tsv."
+    )
+
+    return check_result, rows
 
 
 def check_phenotype_context(phenotype_list, context_list):
