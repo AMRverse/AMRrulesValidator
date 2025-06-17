@@ -256,10 +256,8 @@ def check_gene(gene_list, rule_list, rows):
     return check_result, rows
 
 
-def check_id_accessions(nodeID_list, protein_list, nucleotide_list, hmm_list, variation_type_list, refseq_file, node_file, hmm_file):
+def check_id_accessions(nodeID_list, protein_list, nucleotide_list, hmm_list, variation_type_list, refseq_file, node_file, hmm_file, rows):
     
-    print("\nChecking nodeID, refseq accession, GenBank accession and HMM accession columns...")
-
     # parse the refseq file - get the refseq nucl and prot accessions, genbank accessions and hmm accessions to check against
     # Combine the nucl and prot accessions together
     protein_accessions = [] 
@@ -297,73 +295,41 @@ def check_id_accessions(nodeID_list, protein_list, nucleotide_list, hmm_list, va
     # remove any empty strings
     hmm_accessions  = [value for value in hmm_accessions if value != ""]
 
+    # now check individual columns for allowable values
+    # this function is actually multiple smaller checks
+    # for each list, if any value is NA or empty, we should replace with ENTRY MISSING, as there should be a dash
+    # secondly, if any value is not empty, a dash, or ENTRY MISSING, we should check if it's in the relevant accession list
+    # finally, any rows that have all values empty, NA, '-' or ENTRY MISSING should be checked to see if they have variation type 'Combination'
+    # this would make that row valid. Otherwise, the row is invalid
+    
+    invalid_node_dict, rows = check_values_in_list(nodeID_list, refseq_node_ids, 'nodeID', rows, missing_allowed=True, fail_reason="is not a valid NCBI Reference Gene Hierarchy node ID")
+
+    invalid_prot_dict, rows = check_values_in_list(protein_list, protein_accessions, 'protein accession', rows, missing_allowed=True, fail_reason="is not an NCBI Reference Gene Catalog protein accession")
+
+    invalid_nucl_dict, rows = check_values_in_list(nucleotide_list, nucleotide_accessions, 'nucleotide accession', rows, missing_allowed=True, fail_reason="is not an NCBI Reference Gene Catalog nucleotide accession")
+
+    invalid_hmm_dict, rows = check_values_in_list(hmm_list, hmm_accessions, 'HMM accession', rows, missing_allowed=True, fail_reason="is not an AMRFinderPlus HMM accession")
+
     # Check that in combination, at least one of these columns has a value
-    invalid_indices = []
+    invalid_combo_dict = {}
     for index, values in enumerate(zip(nodeID_list, protein_list, nucleotide_list, hmm_list)):
-        if all(value == '' or value in ['NA', '-'] for value in values):
+        values = [value.strip() for value in values]
+        if all(value in ['NA', '-', 'ENTRY MISSING', ''] for value in values):
             # if all the values are empty, check if variation type is 'Combination' for this row
             # if variation type is 'Combination', then this is a valid value
-            # only applies if we have the variation type column
-            if variation_type_list is not None:
-                if variation_type_list[index].strip() == 'Combination':
-                    continue
-                else:
-                    invalid_indices.append(index)
+            if variation_type_list[index].strip() == 'Combination':
+                continue
             else:
-                invalid_indices.append(index)
-    
-    # now we need to assess each list individually against the relevant accession lists
-    # fine in the value is '-' as this is allowed in individual columns, just not all in combo
-    # store the output so we can easily print what rows and columns are the issues
-    invalid_node = []
-    for index, value in enumerate(nodeID_list):
-        value = value.strip()
-        if index not in invalid_indices and value not in refseq_node_ids and value != '-':
-            invalid_node.append(index)
-    invalid_prot = []
-    for index, value in enumerate(protein_list):
-        value = value.strip()
-        if index not in invalid_indices and value not in protein_accessions and value != '-':
-            invalid_prot.append(index)
-    invalid_nucl = []
-    for index, value in enumerate(nucleotide_list):
-        value = value.strip()
-        if index not in invalid_indices and value not in nucleotide_accessions and value != '-':
-            invalid_nucl.append(index)
-    invalid_hmm = []
-    for index, value in enumerate(hmm_list):
-        value = value.strip()
-        if index not in invalid_indices and value not in hmm_accessions and value != '-':
-            invalid_hmm.append(index)
-    
-    if not invalid_indices:
-        print("✅ All rows contain at least one value in one of these columns.")
-    else:
-        print(f"❌ {len(invalid_indices)} rows have failed the check because at least one of either nodeID, refseq accession, GenBank accession and HMM accession must contain a value. The only exception to this is if the variation type is 'Combination', in which case all of these columns can be '-'.")
-        for index in invalid_indices:
-            print(f"Row {index + 2}")
-    if invalid_node or invalid_prot or invalid_nucl or invalid_hmm:
-        print(f"❌ One or more accessions aren't present in either the NCBI Reference Gene Catalog (for nodeID, refseq accession and genbank accession) or the NCBI Reference HMM Catalog (for HMM accession). Empty cells must be specified by '-'.")
-        print("\nInvalid nodeID accessions values:")
-        for index in invalid_node:
-            print(f"Row {index + 2}: {nodeID_list[index]}")
-        print("\nInvalid protein accession values:")
-        for index in invalid_prot:
-            print(f"Row {index + 2}: {protein_list[index]}")
-        print("\nInvalid nucleotide accession values:")
-        for index in invalid_nucl:
-            print(f"Row {index + 2}: {nucleotide_list[index]}")
-        print("\nInvalid HMM accession values:")
-        for index in invalid_hmm:
-            print(f"Row {index + 2}: {hmm_list[index]}")
-    else:
-        print("✅ All accessions are present in the relevant catalogues.")
+                invalid_combo_dict[index] = "All ID accessions are empty, NA, or '-'. At least one of these columns must contain a valid accession value."
 
-    if not invalid_indices and not invalid_node and not invalid_prot and not invalid_nucl and not invalid_hmm:
-        return True
-    else:
-        return False
+    check_result = report_check_results(
+        check_name="ID accessions",
+        invalid_dict={**invalid_node_dict, **invalid_prot_dict, **invalid_nucl_dict, **invalid_hmm_dict, **invalid_combo_dict},
+        success_message="All ID accessions are valid",
+        failure_message="At least one ID accession must be present, not 'NA', empty or '-'. Node IDs should be in the NCBI Reference Gene Hierarchy node ID list, protein and nucleotide accessions should be in the NCBI Reference Gene Catalog accession lists, and HMM accessions should be in the AMRFinderPlus HMM accession list.\nNOTE: If you have used an accession outside of those reference catalogs (e.g. your gene is not present in the AMRFinderPlus database), then this check will fail. Please double check those accessions exist."
+    )
 
+    return check_result, rows
 
 def check_aro(aro_list, aro_terms):
     

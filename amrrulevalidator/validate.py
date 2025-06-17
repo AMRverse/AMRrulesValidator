@@ -94,10 +94,6 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
     rule_ids = get_column("ruleID", rows)
     rule_ids, summary_checks["ruleID"], rows = check_ruleIDs(rule_ids, rows)
 
-    print("Writing output file...")
-    # Write the processed rows to the output file
-    write_tsv(rows, output_p, CANONICAL_COLUMNS)
-
     # Check txid and organism
     print("\nChecking txid column...")
     # parse the taxonomy file to get valid txids and organisms
@@ -131,7 +127,7 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
     # Check gene accessions
     # okay so for these columns, at least one of them must have a value
     print("\nChecking nodeID, refseq accession, GenBank accession and HMM accession columns...")
-    
+
     accession_columns = ["nodeID", "protein accession", "nucleotide accession", "HMM accession", "variation type"]
     if not all(col in found_columns for col in accession_columns):
         print(f"\n❌ Spec {SPEC_VERSION} requires at least one of nodeID, protein accession, nucleotide accession, HMM accession and variation type columns to be present. We cannot validate accessions unless all columns are present. The following columns were not found:")
@@ -156,8 +152,12 @@ def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
             get_column("nucleotide accession", rows), 
             get_column("HMM accession", rows), 
             get_column("variation type", rows), 
-            refseq_file, amrfp_nodes, hmm_file
+            refseq_file, amrfp_nodes, hmm_file, rows
         )
+
+    print("Writing output file...")
+    # Write the processed rows to the output file
+    write_tsv(rows, output_p, CANONICAL_COLUMNS)
 
     # Check ARO accession
     if "ARO accession" in found_columns:
