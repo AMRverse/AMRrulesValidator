@@ -65,7 +65,7 @@ def run_convert_to_latest_spec(input_p: Path, output_p: Path, rm: ResourceManage
     for index, (ref_acc, gen_acc) in enumerate(zip(refseq_accessions, genbank_accessions)):
         prot_found = False
         nucl_found = False
-        ref_assgined = False
+        ref_assigned = False
         gen_assigned = False
         if ref_acc == "-" and gen_acc == "-":
             # if both accessions are missing, set both to empty string
