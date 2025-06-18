@@ -2,6 +2,7 @@ import argparse
 from pathlib import Path
 from amrrulevalidator.utils.resources import ResourceManager
 from amrrulevalidator.validate import run_validate
+from amrrulevalidator.convert_rules import run_convert_to_latest_spec
 
 
 def main():
@@ -20,6 +21,11 @@ def main():
     
     # update-resources subcommand
     update_parser = subparsers.add_parser("update-resources", help="Update CARD and AMRFinderPlus resources used for validation")
+
+    # convert to latest spec subcommand
+    convert_parser = subparsers.add_parser("convert-to-latest-spec", help="Convert AMRrules file to the latest specification")
+    convert_parser.add_argument("--input", required=True, help="AMRrules tsv file to convert")
+    convert_parser.add_argument("--output", required=True, help="Converted AMRrules file, in tsv format")
     
     args = parser.parse_args()
     
@@ -47,6 +53,16 @@ def main():
             return 0
         else:
             print("Failed to update some resources.")
+            return 1
+    elif args.command == "convert-to-latest-spec":
+        input_path = Path(args.input)
+        output_path = Path(args.output)
+        resource_manager = ResourceManager()
+        success = run_convert_to_latest_spec(input_path, output_path, resource_manager)
+        if success:
+            return 0
+        else:
+            print("Conversion failed.")
             return 1
     else:
         parser.print_help()
