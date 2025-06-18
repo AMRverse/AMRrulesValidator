@@ -13,49 +13,6 @@ def get_column(column_name, rows):
     return [row[column_name] for row in rows if column_name in row]
 
 
-def _normalize_blanks(rows):
-    """
-    Normalize blank/empty values in rows.
-    
-    Converts empty strings and "NA" to "-" in all cells.
-    
-    Args:
-        rows: List of dictionaries containing row data
-        
-    Returns:
-        List of dictionaries with normalized blank values
-    """
-    for row in rows:
-        for key in row:
-            # Convert empty strings and "NA" to "-"
-            if row[key] == "" or row[key].upper() == "NA":
-                row[key] = "-"
-    
-    return rows
-
-
-def _flag_missing(rows):
-    """
-    Flag missing values in rows.
-    
-    Replaces "-" with "ENTRY MISSING" to highlight required fields
-    that are missing data.
-    
-    Args:
-        rows: List of dictionaries containing row data
-        
-    Returns:
-        List of dictionaries with missing values flagged
-    """
-    for row in rows:
-        for key in row:
-            # Replace "-" with "ENTRY MISSING"
-            if row[key] == "-":
-                row[key] = "ENTRY MISSING"
-    
-    return rows
-
-
 def run_validate(input_p: Path, output_p: Path, rm: ResourceManager) -> bool:
     """
     Validate an AMRrules file.
