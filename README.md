@@ -170,6 +170,24 @@ After validation, you can clean a rules file to prepare it for import into the i
 amrrule clean --input path/to/validated_rules.tsv --output path/to/clean_rules.tsv
 ```
 
+### Updating rules file to spec v0.6
+
+Can take already validated v0.5 rules files and do a programmatic update to v0.6.
+
+```bash
+amrrule convert-to-latest-spec --input path/to/old_rules.tsv --output path/to/updated_rules.tsv
+```
+
+Adds new columns as specified in spec.
+
+For txid, will use value in organism to look up the relevant txid in the NCBI taxonomy, if not found will enter `UNKNOWN`.
+
+For refseq and GenBank accessions, will look up accessions in the AMRFinderPlus reference database to try and determine if they are protein or nucleotide accessions, and update accordingly. If unclear, will add to one of the columns and add `CHECK ACCESSION TYPE` for manual fixing.
+
+Adds breakpoint standard column but fills with `ADD VALUE`, which will likely be `-` in most cases.
+
+Updates evidence grade column: `strong` becomes `high`, `weak` gets flagged with `UPDATE TO low or very low`, so the user can select the most appropriate option.
+
 ## License
 
 This project is licensed under the GNU General Public License v3.0.
