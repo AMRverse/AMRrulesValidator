@@ -18,9 +18,11 @@ The easiest installation method is via pip from GitHub, which will install all r
 
 ```bash
 # Optional: create a conda environment to install package into
-conda create amrrulevalidator
+conda create -n amrrulevalidator
 
 conda activate amrrulevalidator
+
+conda install pip
 
 # Install with pip from GitHub
 pip install git+https://github.com/AMRverse/AMRrulevalidator.git
@@ -158,7 +160,7 @@ The validator performs a series of checks, with each focusing on specific column
 
 19. **evidence grade and limitations**: Validates evidence grades against allowed values. For evidence limitations, checks that mulitple limitations are separated by a comma, and not a different delimiter. Checks limitations are one of the allowed values. Checks that if evidence grade is not `high`, an evidence limitation is provided.
 
-Allowable values for some columns are specified within `constants.py`, and should match the current version of the AMRrules spec:
+Allowable values for some columns are specified within `constants.py`, and should match the current version of the AMRrules spec.
 
 ### Cleaning a rules file
 
