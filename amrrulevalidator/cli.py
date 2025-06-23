@@ -2,6 +2,7 @@ import argparse
 from pathlib import Path
 from amrrulevalidator.utils.resources import ResourceManager
 from amrrulevalidator.validate import run_validate
+from amrrulevalidator.clean import run_clean
 from amrrulevalidator.convert_rules import run_convert_to_latest_spec
 
 
@@ -42,8 +43,16 @@ def main():
             print("Validation failed.")
             return 1
     elif args.command == "clean":
-        print("TODO clean")
-        return 0
+        print(f"Cleaning {args.input}...")
+        input_path = Path(args.input)
+        output_path = Path(args.output)
+        success = run_clean(input_path, output_path)
+        if success:
+            print(f"Cleaning complete. Output written to {args.output}")
+            return 0
+        else:
+            print("Cleaning failed.")
+            return 1
     elif args.command == "update-resources":
         print("Updating resources...")
         resource_manager = ResourceManager()
